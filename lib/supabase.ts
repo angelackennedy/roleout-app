@@ -1,9 +1,20 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = 'https://wvepvyihbgvwhxmnhogp.supabase.co';
-const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind2ZXB2eWloYmd2d2h4bW5ob2dwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE3NTc5NDgsImV4cCI6MjA3NzMzMzk0OH0.2FPQ5ykrXr6lnEpn-lqrB2r4xGlk3m8TdGZcHBYhQtc';
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// Runtime diagnostics for Supabase configuration
+if (typeof window !== 'undefined') {
+  console.log('[Supabase Client] URL:', supabaseUrl ? `${supabaseUrl.slice(0, 30)}...` : 'MISSING');
+  console.log('[Supabase Client] Key:', supabaseAnonKey ? `${supabaseAnonKey.slice(0, 20)}...****` : 'MISSING');
+}
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+
+
+
+
+
 
 export type Database = {
   public: {

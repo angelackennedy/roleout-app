@@ -2,7 +2,7 @@
 -- Run this in your Supabase SQL Editor
 
 -- Enable UUID extension
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "pgcrypto
 
 -- Profiles table (extends auth.users)
 CREATE TABLE profiles (
@@ -15,7 +15,7 @@ CREATE TABLE profiles (
 
 -- Posts table
 CREATE TABLE posts (
-  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID REFERENCES profiles(id) ON DELETE CASCADE NOT NULL,
   video_url TEXT NOT NULL,
   caption TEXT,
@@ -26,7 +26,7 @@ CREATE TABLE posts (
 
 -- Likes table
 CREATE TABLE likes (
-  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  id UUID DEFAULT  gen_random_uuid() PRIMARY KEY,
   user_id UUID REFERENCES profiles(id) ON DELETE CASCADE NOT NULL,
   post_id UUID REFERENCES posts(id) ON DELETE CASCADE NOT NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -35,7 +35,7 @@ CREATE TABLE likes (
 
 -- Comments table
 CREATE TABLE comments (
-  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID REFERENCES profiles(id) ON DELETE CASCADE NOT NULL,
   post_id UUID REFERENCES posts(id) ON DELETE CASCADE NOT NULL,
   content TEXT NOT NULL,
