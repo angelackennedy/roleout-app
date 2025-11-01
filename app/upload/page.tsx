@@ -12,6 +12,7 @@ export default function UploadPage() {
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState("");
+  const [uploadSuccess, setUploadSuccess] = useState(false);
   const { user } = useAuth();
   const router = useRouter();
 
@@ -33,6 +34,7 @@ export default function UploadPage() {
     setFile(selectedFile);
     setPreviewUrl(URL.createObjectURL(selectedFile));
     setError("");
+    setUploadSuccess(false);
   };
 
   const uploadWithProgress = async (
@@ -86,6 +88,7 @@ export default function UploadPage() {
     setUploading(true);
     setProgress(0);
     setError("");
+    setUploadSuccess(false);
 
     try {
       const fileExt = file.name.split(".").pop();
@@ -109,11 +112,17 @@ export default function UploadPage() {
 
       if (dbError) throw dbError;
 
-      router.push("/feed");
+      setUploadSuccess(true);
+      setProgress(100);
+
+      setTimeout(() => {
+        router.push("/feed");
+      }, 1500);
     } catch (e: any) {
       console.error(e);
       setError(e.message || "Upload failed");
       setProgress(0);
+      setUploadSuccess(false);
     } finally {
       setUploading(false);
     }
@@ -143,6 +152,7 @@ export default function UploadPage() {
               onChange={handleFileChange}
               className="nav-btn"
               style={{ width: "100%" }}
+              disabled={uploading}
             />
           </div>
 
@@ -177,6 +187,7 @@ export default function UploadPage() {
               onChange={(e) => setCaption(e.target.value)}
               rows={3}
               placeholder="Add a caption..."
+              disabled={uploading}
               style={{
                 width: "100%",
                 padding: 10,
@@ -185,6 +196,7 @@ export default function UploadPage() {
                 backgroundColor: "rgba(255,255,255,0.05)",
                 color: "inherit",
                 fontFamily: "inherit",
+                opacity: uploading ? 0.6 : 1,
               }}
             />
           </div>
@@ -194,26 +206,33 @@ export default function UploadPage() {
               <div style={{ 
                 display: "flex", 
                 justifyContent: "space-between", 
-                marginBottom: 6,
+                marginBottom: 8,
                 fontSize: 14,
                 color: "rgba(255,255,255,0.7)"
               }}>
-                <span>Uploading...</span>
+                <span>
+                  {uploadSuccess ? "✅ Uploaded successfully" : "Uploading..."}
+                </span>
                 <span>{progress}%</span>
               </div>
               <div style={{
                 width: "100%",
-                height: 6,
+                height: 8,
                 backgroundColor: "rgba(255,255,255,0.1)",
-                borderRadius: 3,
+                borderRadius: 4,
                 overflow: "hidden"
               }}>
                 <div style={{
                   width: `${progress}%`,
                   height: "100%",
-                  backgroundColor: "var(--accent-gold)",
+                  backgroundColor: uploadSuccess 
+                    ? "var(--accent-gold)" 
+                    : "var(--accent-gold)",
                   transition: "width 0.3s ease",
-                  borderRadius: 3
+                  borderRadius: 4,
+                  boxShadow: uploadSuccess 
+                    ? "0 0 12px var(--accent-gold)" 
+                    : "none"
                 }} />
               </div>
             </div>
@@ -242,7 +261,11 @@ export default function UploadPage() {
               cursor: !file || uploading ? "not-allowed" : "pointer"
             }}
           >
-            {uploading ? `Uploading... ${progress}%` : "Upload"}
+            {uploadSuccess 
+              ? "✅ Upload Complete" 
+              : uploading 
+                ? `Uploading... ${progress}%` 
+                : "Upload"}
           </button>
         </div>
       </div>
