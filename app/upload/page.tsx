@@ -10,6 +10,7 @@ export default function UploadPage() {
   const [previewUrl, setPreviewUrl] = useState<string>("");
   const [caption, setCaption] = useState("");
   const [uploading, setUploading] = useState(false);
+  const [progress, setProgress] = useState(0);
   const [error, setError] = useState("");
   const { user } = useAuth();
   const router = useRouter();
@@ -34,6 +35,44 @@ export default function UploadPage() {
     setError("");
   };
 
+  const uploadWithProgress = async (
+    fileName: string,
+    file: File
+  ): Promise<void> => {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+      const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+
+      xhr.upload.addEventListener("progress", (e) => {
+        if (e.lengthComputable) {
+          const percentage = Math.round((e.loaded / e.total) * 100);
+          setProgress(percentage);
+        }
+      });
+
+      xhr.addEventListener("load", () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve();
+        } else {
+          reject(new Error(`Upload failed: ${xhr.statusText}`));
+        }
+      });
+
+      xhr.addEventListener("error", () => reject(new Error("Upload failed")));
+
+      xhr.open(
+        "POST",
+        `${supabaseUrl}/storage/v1/object/media/${fileName}`
+      );
+      xhr.setRequestHeader("Authorization", `Bearer ${supabaseKey}`);
+      xhr.setRequestHeader("Content-Type", file.type);
+      xhr.setRequestHeader("x-upsert", "true");
+
+      xhr.send(file);
+    });
+  };
+
   const handleUpload = async () => {
     if (!user) {
       setError("You must be signed in to upload.");
@@ -45,24 +84,24 @@ export default function UploadPage() {
     }
 
     setUploading(true);
+    setProgress(0);
     setError("");
 
     try {
-      const fileExt = file.name.split('.').pop();
+      const fileExt = file.name.split(".").pop();
       const fileName = `${user.id}/${Date.now()}.${fileExt}`;
+      const isVideo = file.type.startsWith("video/");
+      const isImage = file.type.startsWith("image/");
 
-      const { error: uploadError } = await supabase.storage
-        .from("media")
-        .upload(fileName, file, { contentType: file.type });
-
-      if (uploadError) throw uploadError;
+      await uploadWithProgress(fileName, file);
 
       const { data } = supabase.storage.from("media").getPublicUrl(fileName);
       const publicUrl = data.publicUrl;
 
       const { error: dbError } = await supabase.from("posts").insert({
         user_id: user.id,
-        video_url: publicUrl,
+        video_url: isVideo ? publicUrl : null,
+        image_url: isImage ? publicUrl : null,
         caption: caption.trim() || null,
         like_count: 0,
         comment_count: 0,
@@ -74,6 +113,7 @@ export default function UploadPage() {
     } catch (e: any) {
       console.error(e);
       setError(e.message || "Upload failed");
+      setProgress(0);
     } finally {
       setUploading(false);
     }
@@ -149,6 +189,36 @@ export default function UploadPage() {
             />
           </div>
 
+          {uploading && (
+            <div>
+              <div style={{ 
+                display: "flex", 
+                justifyContent: "space-between", 
+                marginBottom: 6,
+                fontSize: 14,
+                color: "rgba(255,255,255,0.7)"
+              }}>
+                <span>Uploading...</span>
+                <span>{progress}%</span>
+              </div>
+              <div style={{
+                width: "100%",
+                height: 6,
+                backgroundColor: "rgba(255,255,255,0.1)",
+                borderRadius: 3,
+                overflow: "hidden"
+              }}>
+                <div style={{
+                  width: `${progress}%`,
+                  height: "100%",
+                  backgroundColor: "var(--accent-gold)",
+                  transition: "width 0.3s ease",
+                  borderRadius: 3
+                }} />
+              </div>
+            </div>
+          )}
+
           {error && (
             <div style={{ 
               padding: 12, 
@@ -172,7 +242,7 @@ export default function UploadPage() {
               cursor: !file || uploading ? "not-allowed" : "pointer"
             }}
           >
-            {uploading ? "Uploading..." : "Upload"}
+            {uploading ? `Uploading... ${progress}%` : "Upload"}
           </button>
         </div>
       </div>
