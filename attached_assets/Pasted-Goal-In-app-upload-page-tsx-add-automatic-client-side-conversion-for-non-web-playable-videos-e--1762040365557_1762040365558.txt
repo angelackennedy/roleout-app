@@ -1,0 +1,41 @@
+Goal: In `app/upload/page.tsx`, add automatic client-side conversion for non-web-playable videos (e.g., iPhone HEVC/MOV) to MP4 (H.264 + AAC) using ffmpeg.wasm, then upload the converted file to Supabase Storage. Also show a conversion progress % and use the converted file for the preview and upload.
+
+Scope:
+- Do NOT modify globals.css. Keep all UI styles inline or in this file.
+- Maintain existing upload logic, caption, and redirect to /feed.
+- If the chosen file is already browser-playable, skip conversion.
+- If conversion runs, display a small note: “Converting to web-safe MP4…” with %.
+
+Implementation details:
+1) Install deps (done): `@ffmpeg/ffmpeg` and `@ffmpeg/util`.
+2) Add helpers inside the component file:
+   - `canBrowserPlay(file: File): boolean` using a temporary `<video>` and `canPlayType`.
+   - `convertToMp4IfNeeded(file: File, onProgress?: (p:number)=>void): Promise<File>` using:
+     ```ts
+     import { FFmpeg } from "@ffmpeg/ffmpeg";
+     import { fetchFile } from "@ffmpeg/util";
+     const ffmpeg = new FFmpeg();
+     await ffmpeg.load({
+       coreURL: "https://unpkg.com/@ffmpeg/core@0.12.6/dist/ffmpeg-core.js",
+     });
+     ffmpeg.on("progress", ({ progress }) => onProgress?.(Math.round(progress*100)));
+     // write input, exec x264+aac, read output -> new File([...], "name.mp4", {type:"video/mp4"})
+     ```
+3) State additions:
+   - `safeFile: File | null` (the file we will actually upload)
+   - `convertProgress: number`
+   - `formatNote: string`
+4) Update the file input handler (`onChange`) to:
+   - set a preview URL immediately for the picked file
+   - if `!canBrowserPlay(file)` → set `formatNote`, call `convertToMp4IfNeeded(file, setConvertProgress)`, then set `safeFile` and update preview to the converted file, clear `formatNote`
+   - else set `safeFile = file`.
+5) In `handleUpload`, upload `safeFile` (not the original variable), determine `isImage = safeFile.type.startsWith("image/")`, create path:
+   - `${isImage ? 'images' : 'videos'}/${user.id}/${Date.now()}.${ext}`
+   - get public URL and insert into `posts` using `image_url` or `video_url` appropriately.
+6) Minimal UI:
+   - A small card/note that shows `formatNote` and `${convertProgress}%` while converting.
+   - Keep existing progress/Uploading UI intact.
+
+Deliverables:
+- Return the full, updated contents of `app/upload/page.tsx`.
+- Briefly list the new state variables and functions you added.

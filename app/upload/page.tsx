@@ -4,15 +4,74 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
+import { FFmpeg } from "@ffmpeg/ffmpeg";
+import { fetchFile } from "@ffmpeg/util";
+
+function canBrowserPlay(file: File): boolean {
+  if (!file.type.startsWith("video/")) return true;
+  
+  const video = document.createElement("video");
+  const canPlay = video.canPlayType(file.type);
+  return canPlay === "probably" || canPlay === "maybe";
+}
+
+async function convertToMp4IfNeeded(
+  file: File,
+  onProgress?: (p: number) => void
+): Promise<File> {
+  const ffmpeg = new FFmpeg();
+  
+  await ffmpeg.load({
+    coreURL: "https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.js",
+  });
+
+  ffmpeg.on("progress", ({ progress }) => {
+    onProgress?.(Math.round(progress * 100));
+  });
+
+  const inputName = "input." + (file.name.split(".").pop() || "mov");
+  const outputName = "output.mp4";
+
+  await ffmpeg.writeFile(inputName, await fetchFile(file));
+
+  await ffmpeg.exec([
+    "-i",
+    inputName,
+    "-c:v",
+    "libx264",
+    "-preset",
+    "medium",
+    "-crf",
+    "23",
+    "-c:a",
+    "aac",
+    "-b:a",
+    "128k",
+    "-movflags",
+    "+faststart",
+    outputName,
+  ]);
+
+  const data = await ffmpeg.readFile(outputName) as Uint8Array;
+  // @ts-expect-error - Uint8Array type mismatch between ffmpeg.wasm and DOM API
+  const blob = new Blob([data], { type: "video/mp4" });
+  
+  const originalName = file.name.replace(/\.[^.]+$/, "");
+  return new File([blob], `${originalName}.mp4`, { type: "video/mp4" });
+}
 
 export default function UploadPage() {
   const [file, setFile] = useState<File | null>(null);
+  const [safeFile, setSafeFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string>("");
   const [caption, setCaption] = useState("");
   const [uploading, setUploading] = useState(false);
+  const [converting, setConverting] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [convertProgress, setConvertProgress] = useState(0);
   const [error, setError] = useState("");
   const [uploadSuccess, setUploadSuccess] = useState(false);
+  const [formatNote, setFormatNote] = useState("");
   const { user } = useAuth();
   const router = useRouter();
 
@@ -22,7 +81,7 @@ export default function UploadPage() {
     }
   }, [user, router]);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
     if (!selectedFile) return;
 
@@ -35,6 +94,45 @@ export default function UploadPage() {
     setPreviewUrl(URL.createObjectURL(selectedFile));
     setError("");
     setUploadSuccess(false);
+    setFormatNote("");
+    setConvertProgress(0);
+
+    if (selectedFile.type.startsWith("image/")) {
+      setSafeFile(selectedFile);
+      return;
+    }
+
+    if (canBrowserPlay(selectedFile)) {
+      setSafeFile(selectedFile);
+      return;
+    }
+
+    try {
+      setConverting(true);
+      setFormatNote("Converting to web-safe MP4…");
+      
+      const converted = await convertToMp4IfNeeded(
+        selectedFile,
+        setConvertProgress
+      );
+
+      setSafeFile(converted);
+      
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
+      setPreviewUrl(URL.createObjectURL(converted));
+      
+      setFormatNote("");
+      setConvertProgress(0);
+    } catch (err: any) {
+      console.error("Conversion error:", err);
+      setError(`Conversion failed: ${err.message || "Unknown error"}`);
+      setFormatNote("");
+      setSafeFile(null);
+    } finally {
+      setConverting(false);
+    }
   };
 
   const uploadWithProgress = async (
@@ -80,7 +178,7 @@ export default function UploadPage() {
       setError("You must be signed in to upload.");
       return;
     }
-    if (!file) {
+    if (!safeFile) {
       setError("Please select a file first.");
       return;
     }
@@ -91,12 +189,14 @@ export default function UploadPage() {
     setUploadSuccess(false);
 
     try {
-      const fileExt = file.name.split(".").pop();
-      const fileName = `${user.id}/${Date.now()}.${fileExt}`;
-      const isVideo = file.type.startsWith("video/");
-      const isImage = file.type.startsWith("image/");
+      const fileExt = safeFile.name.split(".").pop();
+      const isVideo = safeFile.type.startsWith("video/");
+      const isImage = safeFile.type.startsWith("image/");
+      
+      const folder = isImage ? "images" : "videos";
+      const fileName = `${folder}/${user.id}/${Date.now()}.${fileExt}`;
 
-      await uploadWithProgress(fileName, file);
+      await uploadWithProgress(fileName, safeFile);
 
       const { data } = supabase.storage.from("media").getPublicUrl(fileName);
       const publicUrl = data.publicUrl;
@@ -130,8 +230,8 @@ export default function UploadPage() {
 
   if (!user) return null;
 
-  const isVideo = file?.type.startsWith("video/");
-  const isImage = file?.type.startsWith("image/");
+  const isVideo = safeFile?.type.startsWith("video/");
+  const isImage = safeFile?.type.startsWith("image/");
 
   return (
     <main className="container">
@@ -152,11 +252,54 @@ export default function UploadPage() {
               onChange={handleFileChange}
               className="nav-btn"
               style={{ width: "100%" }}
-              disabled={uploading}
+              disabled={uploading || converting}
             />
           </div>
 
-          {previewUrl && (
+          {converting && formatNote && (
+            <div
+              style={{
+                padding: 12,
+                borderRadius: 6,
+                backgroundColor: "rgba(197,164,109,0.1)",
+                border: "1px solid rgba(197,164,109,0.3)",
+                color: "var(--accent-gold)",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  marginBottom: 8,
+                  fontSize: 14,
+                }}
+              >
+                <span>{formatNote}</span>
+                <span>{convertProgress}%</span>
+              </div>
+              <div
+                style={{
+                  width: "100%",
+                  height: 6,
+                  backgroundColor: "rgba(255,255,255,0.1)",
+                  borderRadius: 3,
+                  overflow: "hidden",
+                }}
+              >
+                <div
+                  style={{
+                    width: `${convertProgress}%`,
+                    height: "100%",
+                    backgroundColor: "var(--accent-gold)",
+                    transition: "width 0.3s ease",
+                    borderRadius: 3,
+                  }}
+                />
+              </div>
+            </div>
+          )}
+
+          {previewUrl && !converting && (
             <div>
               <label style={{ display: "block", marginBottom: 8, fontWeight: 500 }}>
                 Preview
@@ -187,7 +330,7 @@ export default function UploadPage() {
               onChange={(e) => setCaption(e.target.value)}
               rows={3}
               placeholder="Add a caption..."
-              disabled={uploading}
+              disabled={uploading || converting}
               style={{
                 width: "100%",
                 padding: 10,
@@ -196,76 +339,84 @@ export default function UploadPage() {
                 backgroundColor: "rgba(255,255,255,0.05)",
                 color: "inherit",
                 fontFamily: "inherit",
-                opacity: uploading ? 0.6 : 1,
+                opacity: uploading || converting ? 0.6 : 1,
               }}
             />
           </div>
 
           {uploading && (
             <div>
-              <div style={{ 
-                display: "flex", 
-                justifyContent: "space-between", 
-                marginBottom: 8,
-                fontSize: 14,
-                color: "rgba(255,255,255,0.7)"
-              }}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  marginBottom: 8,
+                  fontSize: 14,
+                  color: "rgba(255,255,255,0.7)",
+                }}
+              >
                 <span>
                   {uploadSuccess ? "✅ Uploaded successfully" : "Uploading..."}
                 </span>
                 <span>{progress}%</span>
               </div>
-              <div style={{
-                width: "100%",
-                height: 8,
-                backgroundColor: "rgba(255,255,255,0.1)",
-                borderRadius: 4,
-                overflow: "hidden"
-              }}>
-                <div style={{
-                  width: `${progress}%`,
-                  height: "100%",
-                  backgroundColor: uploadSuccess 
-                    ? "var(--accent-gold)" 
-                    : "var(--accent-gold)",
-                  transition: "width 0.3s ease",
+              <div
+                style={{
+                  width: "100%",
+                  height: 8,
+                  backgroundColor: "rgba(255,255,255,0.1)",
                   borderRadius: 4,
-                  boxShadow: uploadSuccess 
-                    ? "0 0 12px var(--accent-gold)" 
-                    : "none"
-                }} />
+                  overflow: "hidden",
+                }}
+              >
+                <div
+                  style={{
+                    width: `${progress}%`,
+                    height: "100%",
+                    backgroundColor: "var(--accent-gold)",
+                    transition: "width 0.3s ease",
+                    borderRadius: 4,
+                    boxShadow: uploadSuccess
+                      ? "0 0 12px var(--accent-gold)"
+                      : "none",
+                  }}
+                />
               </div>
             </div>
           )}
 
           {error && (
-            <div style={{ 
-              padding: 12, 
-              borderRadius: 6, 
-              backgroundColor: "rgba(255,0,0,0.1)",
-              color: "#ff6b6b",
-              border: "1px solid rgba(255,0,0,0.2)"
-            }}>
+            <div
+              style={{
+                padding: 12,
+                borderRadius: 6,
+                backgroundColor: "rgba(255,0,0,0.1)",
+                color: "#ff6b6b",
+                border: "1px solid rgba(255,0,0,0.2)",
+              }}
+            >
               {error}
             </div>
           )}
 
           <button
             onClick={handleUpload}
-            disabled={!file || uploading}
+            disabled={!safeFile || uploading || converting}
             className="nav-btn"
             style={{
               width: "100%",
               padding: "12px 20px",
-              opacity: !file || uploading ? 0.5 : 1,
-              cursor: !file || uploading ? "not-allowed" : "pointer"
+              opacity: !safeFile || uploading || converting ? 0.5 : 1,
+              cursor: !safeFile || uploading || converting ? "not-allowed" : "pointer",
             }}
           >
-            {uploadSuccess 
-              ? "✅ Upload Complete" 
-              : uploading 
-                ? `Uploading... ${progress}%` 
-                : "Upload"}
+            {uploadSuccess
+              ? "✅ Upload Complete"
+              : uploading
+                ? `Uploading... ${progress}%`
+                : converting
+                  ? "Converting..."
+                  : "Upload"}
           </button>
         </div>
       </div>
