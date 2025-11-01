@@ -1,39 +1,64 @@
-'use client';
+"use client";
 
-import { useState, useRef, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
-import { useAuth } from '@/lib/auth-context';
+import { useState, useRef, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/lib/auth-context";
 
 export default function UploadPage() {
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
-  const [caption, setCaption] = useState('');
+  const [caption, setCaption] = useState("");
   const [trimStart, setTrimStart] = useState(0);
   const [trimEnd, setTrimEnd] = useState(60);
   const [duration, setDuration] = useState(0);
   const [uploading, setUploading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
   const videoRef = useRef<HTMLVideoElement>(null);
   const { user } = useAuth();
-  const router = useRouter();
+  const router = useRouter(); // === Universal Upload Preview Handler ===
+  const [previewUrl, setPreviewUrl] = useState("");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [formatNote, setFormatNote] = useState("");
+
+  function browserCanPlay(file: File) {
+    const v = document.createElement("video");
+    return !!(file.type && v.canPlayType(file.type));
+  }
+
+  function onSelectFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    if (!f) return;
+
+    setSelectedFile(f);
+    const url = URL.createObjectURL(f);
+    setPreviewUrl(url);
+
+    if (!browserCanPlay(f)) {
+      setFormatNote(
+        "⚠️ This format may play audio only (HEVC/MOV). Convert to MP4 (H.264 + AAC) for full preview.",
+      );
+    } else {
+      setFormatNote("");
+    }
+  }
 
   useEffect(() => {
     if (!user) {
-      router.push('/auth/login');
+      router.push("/auth/login");
     }
   }, [user, router]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (!file.type.startsWith('video/')) {
-        setError('Please select a valid video file');
+      if (!file.type.startsWith("video/")) {
+        setError("Please select a valid video file");
         return;
       }
       setVideoFile(file);
       setVideoUrl(URL.createObjectURL(file));
-      setError('');
+      setError("");
     }
   };
 
@@ -50,14 +75,14 @@ export default function UploadPage() {
 
     const trimDuration = trimEnd - trimStart;
     if (trimDuration > 60) {
-      setError('Video cannot be longer than 60 seconds');
+      setError("Video cannot be longer than 60 seconds");
       return null;
     }
 
     const video = videoRef.current;
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
+
     if (!ctx) return null;
 
     canvas.width = video.videoWidth;
@@ -65,11 +90,11 @@ export default function UploadPage() {
 
     const stream = canvas.captureStream(30);
     const mediaRecorder = new MediaRecorder(stream, {
-      mimeType: 'video/webm;codecs=vp9',
+      mimeType: "video/webm;codecs=vp9",
     });
 
     const chunks: Blob[] = [];
-    
+
     return new Promise((resolve) => {
       mediaRecorder.ondataavailable = (e) => {
         if (e.data.size > 0) {
@@ -78,18 +103,18 @@ export default function UploadPage() {
       };
 
       mediaRecorder.onstop = () => {
-        const blob = new Blob(chunks, { type: 'video/webm' });
+        const blob = new Blob(chunks, { type: "video/webm" });
         resolve(blob);
       };
 
       video.currentTime = trimStart;
-      
+
       video.onseeked = () => {
         mediaRecorder.start();
-        
+
         const interval = setInterval(() => {
           ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-          
+
           if (video.currentTime >= trimEnd) {
             clearInterval(interval);
             mediaRecorder.stop();
@@ -105,51 +130,49 @@ export default function UploadPage() {
     if (!user || !videoFile) return;
 
     setUploading(true);
-    setError('');
+    setError("");
 
     try {
       let uploadBlob: Blob = videoFile;
-      
+
       if (trimEnd - trimStart < duration) {
         const trimmedBlob = await trimVideo();
         if (!trimmedBlob) {
-          throw new Error('Failed to trim video');
+          throw new Error("Failed to trim video");
         }
         uploadBlob = trimmedBlob;
       }
 
       const finalDuration = trimEnd - trimStart;
       if (finalDuration > 60) {
-        setError('Video must be 60 seconds or less');
+        setError("Video must be 60 seconds or less");
         setUploading(false);
         return;
       }
 
       const fileName = `${user.id}/${Date.now()}.webm`;
-      
+
       const { error: uploadError } = await supabase.storage
-        .from('videos')
+        .from("videos")
         .upload(fileName, uploadBlob);
 
       if (uploadError) throw uploadError;
 
-      const { data: { publicUrl } } = supabase.storage
-        .from('videos')
-        .getPublicUrl(fileName);
+      const {
+        data: { publicUrl },
+      } = supabase.storage.from("videos").getPublicUrl(fileName);
 
-      const { error: insertError } = await supabase
-        .from('posts')
-        .insert({
-          user_id: user.id,
-          video_url: publicUrl,
-          caption: caption || null,
-        });
+      const { error: insertError } = await supabase.from("posts").insert({
+        user_id: user.id,
+        video_url: publicUrl,
+        caption: caption || null,
+      });
 
       if (insertError) throw insertError;
 
-      router.push('/feed');
+      router.push("/feed");
     } catch (err: any) {
-      setError(err.message || 'Failed to upload video');
+      setError(err.message || "Failed to upload video");
       setUploading(false);
     }
   };
@@ -168,8 +191,8 @@ export default function UploadPage() {
             </label>
             <input
               type="file"
-              accept="video/*"
-              onChange={handleFileChange}
+              accept="video/*,image/*"
+              onChange={onSelectFile}
               className="w-full px-3 py-2 border border-gray-300 rounded-md dark:bg-gray-800 dark:border-gray-700"
             />
           </div>
@@ -254,7 +277,7 @@ export default function UploadPage() {
             disabled={!videoFile || uploading || trimEnd - trimStart > 60}
             className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {uploading ? 'Uploading...' : 'Upload Video'}
+            {uploading ? "Uploading..." : "Upload Video"}
           </button>
         </div>
       </div>

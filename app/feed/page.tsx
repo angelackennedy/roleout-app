@@ -1,9 +1,9 @@
-'use client';
+"use client";
 
-import { useEffect, useState } from 'react';
-import Link from 'next/link';
-import { supabase } from '@/lib/supabase';
-import { useAuth } from '@/lib/auth-context';
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/lib/auth-context";
 
 interface Post {
   id: string;
@@ -22,122 +22,158 @@ export default function FeedPage() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const { user } = useAuth();
+  // ❤️ Like handler
+  async function handleLike(postId: string, current: number) {
+    // 1. Update on-screen instantly
+    setPosts((prev) =>
+      prev.map((p) =>
+        p.id === postId ? { ...p, like_count: current + 1 } : p,
+      ),
+    );
 
+    // 2. Save change in Supabase
+    const { error } = await supabase
+      .from("posts")
+      .update({ like_count: current + 1 })
+      .eq("id", postId);
+
+    // 3. If it fails, undo the change
+    if (error) {
+      console.error("Like failed:", error);
+      setPosts((prev) =>
+        prev.map((p) => (p.id === postId ? { ...p, like_count: current } : p)),
+      );
+    }
+  }
   useEffect(() => {
     fetchPosts();
   }, []);
-
+  const [flashId, setFlashId] = useState<string | null>(null);
   const fetchPosts = async () => {
     try {
       const { data, error } = await supabase
-        .from('posts')
-        .select(`
+        .from("posts")
+        .select(
+          `
           *,
           profiles (username, avatar_url)
-        `)
-        .order('created_at', { ascending: false })
+        `,
+        )
+        .order("created_at", { ascending: false })
         .limit(20);
 
       if (error) throw error;
       setPosts(data || []);
     } catch (error) {
-      console.error('Error fetching posts:', error);
+      console.error("Error fetching posts:", error);
     } finally {
       setLoading(false);
     }
   };
 
+  // --- REPLACE LINES 50–143 WITH THIS ---
+
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-xl">Loading feed...</div>
-      </div>
+      <main className="container">
+        <section className="hero" style={{ paddingBottom: 10 }}>
+          <h1>Feed</h1>
+          <p>Loading feed…</p>
+        </section>
+      </main>
     );
   }
 
   return (
-    <div className="min-h-screen py-8">
-      <div className="max-w-2xl mx-auto px-4">
-        <div className="flex justify-between items-center mb-8">
-          <h1 className="text-3xl font-bold">Video Feed</h1>
-          {user && (
-            <Link
-              href="/upload"
-              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-            >
-              Upload Video
-            </Link>
-          )}
-        </div>
+    <main className="container">
+      {/* Hero */}
+      <section className="hero" style={{ paddingBottom: 10 }}>
+        <h1>Feed</h1>
+        <p>Browse recent video posts.</p>
+      </section>
 
+      {/* Toolbar */}
+      <div className="feed-toolbar">
+        <span className="pill pill-active">All</span>
+        <div style={{ marginLeft: "auto" }}>
+          <Link href="/upload" className="nav-btn">
+            + Upload
+          </Link>
+        </div>
+      </div>
+
+      {/* Posts */}
+      <section className="feed-list">
         {posts.length === 0 ? (
-          <div className="text-center py-12">
-            <p className="text-xl text-gray-600 dark:text-gray-400 mb-4">
-              No posts yet. Be the first to share a video!
-            </p>
-            {user && (
-              <Link
-                href="/upload"
-                className="inline-block px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-              >
-                Upload Video
-              </Link>
-            )}
-          </div>
+          <p style={{ opacity: 0.85 }}>
+            No posts yet — be the first to share a video!
+          </p>
         ) : (
-          <div className="space-y-6">
-            {posts.map((post) => (
-              <Link
-                key={post.id}
-                href={`/post/${post.id}`}
-                className="block border border-gray-200 dark:border-gray-800 rounded-lg overflow-hidden hover:shadow-lg transition-shadow"
-              >
-                <div className="aspect-video bg-black">
+          posts.map((post) => (
+            <Link
+              key={post.id}
+              href={`/post/${post.id}`}
+              className="post card"
+              tabIndex={0}
+            >
+              {/* Header */}
+              <header className="post-header">
+                <div className="avatar" aria-hidden="true">
+                  {/* If you later have avatars, swap this to an <img src={post.profiles.avatar_url} /> */}
+                  {(post.profiles?.username?.[0] || "U").toUpperCase()}
+                </div>
+                <div>
+                  <div className="post-author">
+                    {post.profiles?.username || "User"}
+                  </div>
+                  <div className="muted">
+                    {new Date(post.created_at).toLocaleString()}
+                  </div>
+                </div>
+              </header>
+
+              {/* Caption */}
+              {post.caption && <p className="post-text">{post.caption}</p>}
+
+              {/* Video */}
+              {post.video_url && (
+                <div className="post-media">
                   <video
-                    src={post.video_url}
-                    className="w-full h-full object-contain"
                     controls
-                    onClick={(e) => e.stopPropagation()}
+                    src={post.video_url}
+                    preload="metadata"
+                    style={{ width: "100%", borderRadius: 10, outline: "none" }}
                   />
                 </div>
-                
-                <div className="p-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <div className="w-8 h-8 rounded-full bg-gray-300 dark:bg-gray-700 flex items-center justify-center">
-                      {post.profiles.avatar_url ? (
-                        <img
-                          src={post.profiles.avatar_url}
-                          alt={post.profiles.username}
-                          className="w-full h-full rounded-full object-cover"
-                        />
-                      ) : (
-                        <span className="text-sm font-semibold">
-                          {post.profiles.username[0].toUpperCase()}
-                        </span>
-                      )}
-                    </div>
-                    <span className="font-semibold">{post.profiles.username}</span>
-                  </div>
-                  
-                  {post.caption && (
-                    <p className="text-gray-700 dark:text-gray-300 mb-2">
-                      {post.caption}
-                    </p>
-                  )}
-                  
-                  <div className="flex items-center gap-4 text-sm text-gray-500">
-                    <span>❤️ {post.like_count}</span>
-                    <span>💬 {post.comment_count}</span>
-                    <span className="ml-auto">
-                      {new Date(post.created_at).toLocaleDateString()}
-                    </span>
-                  </div>
-                </div>
-              </Link>
-            ))}
-          </div>
+              )}
+
+              {/* Footer */}
+              {/* Footer */}
+              <footer className="post-footer">
+                <button
+                  className={`nav-btn ${flashId === post.id ? "flash" : ""}`}
+                  onClick={(e) => {
+                    e.preventDefault(); // stops navigation when clicking inside the post
+                    setFlashId(post.id); // start gold flash
+                    handleLike(post.id, post.like_count); // update like count
+                    setTimeout(() => setFlashId(null), 500); // stop flash after 0.5 s
+                  }}
+                >
+                  ❤️ {post.like_count}
+                </button>
+
+                <button className="nav-btn outline">
+                  💬 {post.comment_count}
+                </button>
+
+                <div className="spacer" />
+
+                <button className="nav-btn outline">⋯</button>
+              </footer>
+            </Link>
+          ))
         )}
-      </div>
-    </div>
+      </section>
+    </main>
   );
 }

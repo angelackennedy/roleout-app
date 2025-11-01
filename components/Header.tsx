@@ -1,71 +1,46 @@
-'use client';
+"use client";
 
-import Link from 'next/link';
-import { useAuth } from '@/lib/auth-context';
+import Link from "next/link";
+import { useAuth } from "@/lib/auth-context";
 
 export default function Header() {
   const { user, signOut } = useAuth();
 
   return (
-    <header className="border-b border-gray-200 dark:border-gray-800">
-      <nav className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center h-16">
-          <Link href="/" className="text-xl font-bold">
-            RollCall
+    <header
+      style={{
+        background: "linear-gradient(90deg,#0A0A0A 0%,#1A1A1A 100%)",
+        borderBottom: "1px solid var(--accent-silver)",
+        color: "var(--text-primary)",
+      }}
+      className="shadow-md"
+    >
+      <nav className="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
+        <h1 style={{ letterSpacing: "2px", fontWeight: 700 }}>
+          <span style={{ color: "var(--text-primary)" }}>ROLE</span>
+          <span style={{ color: "var(--accent-gold)" }}> OUT</span>
+        </h1>
+
+        <div className="flex items-center gap-4 text-sm">
+          <Link href="/feed" className="hover:text-gray-400">
+            Feed
           </Link>
 
-          <div className="flex items-center gap-4">
-            <Link
-              href="/feed"
-              className="text-sm hover:text-gray-600 dark:hover:text-gray-300"
-            >
-              Feed
+          {user && (
+            <Link href="/upload" className="hover:text-gray-400">
+              Upload
             </Link>
-            
-            {user ? (
-              <>
-                <Link
-                  href="/upload"
-                  className="text-sm hover:text-gray-600 dark:hover:text-gray-300"
-                >
-                  Upload
-                </Link>
-                <Link
-                  href="/profile"
-                  className="text-sm hover:text-gray-600 dark:hover:text-gray-300"
-                >
-                  Profile
-                </Link>
-                <Link
-                  href="/moderation"
-                  className="text-sm hover:text-gray-600 dark:hover:text-gray-300"
-                >
-                  Moderation
-                </Link>
-                <button
-                  onClick={signOut}
-                  className="text-sm px-4 py-2 rounded bg-red-600 text-white hover:bg-red-700"
-                >
-                  Sign Out
-                </button>
-              </>
-            ) : (
-              <>
-                <Link
-                  href="/auth/login"
-                  className="text-sm hover:text-gray-600 dark:hover:text-gray-300"
-                >
-                  Login
-                </Link>
-                <Link
-                  href="/auth/signup"
-                  className="text-sm px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700"
-                >
-                  Sign Up
-                </Link>
-              </>
-            )}
-          </div>
+          )}
+
+          {user ? (
+            <button onClick={signOut} className="hover:text-gray-400">
+              Sign Out
+            </button>
+          ) : (
+            <Link href="/auth/signin" className="hover:text-gray-400">
+              Login
+            </Link>
+          )}
         </div>
       </nav>
     </header>

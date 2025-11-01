@@ -4,7 +4,7 @@ import { AuthProvider } from "@/lib/auth-context";
 import Header from "@/components/Header";
 
 export const metadata: Metadata = {
-  title: "RollCall - Video Social Platform",
+  title: "ROLE OUT - Video Social Platform",
   description: "Share and discover short videos with transparent moderation",
 };
 
