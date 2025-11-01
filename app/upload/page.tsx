@@ -72,6 +72,8 @@ export default function UploadPage() {
   const [error, setError] = useState("");
   const [uploadSuccess, setUploadSuccess] = useState(false);
   const [formatNote, setFormatNote] = useState("");
+  const [testResult, setTestResult] = useState<string>("");
+  const [testing, setTesting] = useState(false);
   const { user } = useAuth();
   const router = useRouter();
 
@@ -155,11 +157,25 @@ export default function UploadPage() {
         if (xhr.status >= 200 && xhr.status < 300) {
           resolve();
         } else {
-          reject(new Error(`Upload failed: ${xhr.statusText}`));
+          const errorMsg = xhr.responseText || xhr.statusText || "Unknown upload error";
+          console.error("Upload XHR error:", {
+            status: xhr.status,
+            statusText: xhr.statusText,
+            responseText: xhr.responseText,
+            response: xhr.response,
+          });
+          reject(new Error(`Upload failed (${xhr.status}): ${errorMsg}`));
         }
       });
 
-      xhr.addEventListener("error", () => reject(new Error("Upload failed")));
+      xhr.addEventListener("error", () => {
+        console.error("Upload XHR network error:", {
+          status: xhr.status,
+          statusText: xhr.statusText,
+          responseText: xhr.responseText,
+        });
+        reject(new Error(`Network error: ${xhr.statusText || "Failed to upload"}`));
+      });
 
       xhr.open(
         "POST",
@@ -210,7 +226,10 @@ export default function UploadPage() {
         comment_count: 0,
       });
 
-      if (dbError) throw dbError;
+      if (dbError) {
+        console.error("Database insert error:", dbError);
+        throw dbError;
+      }
 
       setUploadSuccess(true);
       setProgress(100);
@@ -219,12 +238,34 @@ export default function UploadPage() {
         router.push("/feed");
       }, 1500);
     } catch (e: any) {
-      console.error(e);
-      setError(e.message || "Upload failed");
+      console.error("Upload error (full object):", e);
+      const errorMessage = e.message || e.error_description || e.hint || "Upload failed";
+      setError(errorMessage);
       setProgress(0);
       setUploadSuccess(false);
     } finally {
       setUploading(false);
+    }
+  };
+
+  const testStorageAccess = async () => {
+    setTesting(true);
+    setTestResult("");
+    try {
+      const { data, error } = await supabase.storage.from("media").list();
+      
+      if (error) {
+        console.error("Storage test error:", error);
+        setTestResult(`❌ Error: ${error.message}`);
+      } else {
+        console.log("Storage test success:", data);
+        setTestResult(`✅ Success! Found ${data?.length || 0} items in "media" bucket`);
+      }
+    } catch (e: any) {
+      console.error("Storage test exception:", e);
+      setTestResult(`❌ Exception: ${e.message}`);
+    } finally {
+      setTesting(false);
     }
   };
 
@@ -393,31 +434,71 @@ export default function UploadPage() {
                 backgroundColor: "rgba(255,0,0,0.1)",
                 color: "#ff6b6b",
                 border: "1px solid rgba(255,0,0,0.2)",
+                fontSize: 14,
               }}
             >
-              {error}
+              <strong>Error:</strong> {error}
             </div>
           )}
 
-          <button
-            onClick={handleUpload}
-            disabled={!safeFile || uploading || converting}
-            className="nav-btn"
-            style={{
-              width: "100%",
-              padding: "12px 20px",
-              opacity: !safeFile || uploading || converting ? 0.5 : 1,
-              cursor: !safeFile || uploading || converting ? "not-allowed" : "pointer",
-            }}
-          >
-            {uploadSuccess
-              ? "✅ Upload Complete"
-              : uploading
-                ? `Uploading... ${progress}%`
-                : converting
-                  ? "Converting..."
-                  : "Upload"}
-          </button>
+          {testResult && (
+            <div
+              style={{
+                padding: 12,
+                borderRadius: 6,
+                backgroundColor: testResult.startsWith("✅") 
+                  ? "rgba(0,255,0,0.1)" 
+                  : "rgba(255,0,0,0.1)",
+                color: testResult.startsWith("✅") 
+                  ? "#6bff6b" 
+                  : "#ff6b6b",
+                border: testResult.startsWith("✅") 
+                  ? "1px solid rgba(0,255,0,0.2)" 
+                  : "1px solid rgba(255,0,0,0.2)",
+                fontSize: 14,
+              }}
+            >
+              <strong>Storage Test:</strong> {testResult}
+            </div>
+          )}
+
+          <div style={{ display: "flex", gap: 10 }}>
+            <button
+              onClick={handleUpload}
+              disabled={!safeFile || uploading || converting}
+              className="nav-btn"
+              style={{
+                flex: 1,
+                padding: "12px 20px",
+                opacity: !safeFile || uploading || converting ? 0.5 : 1,
+                cursor: !safeFile || uploading || converting ? "not-allowed" : "pointer",
+              }}
+            >
+              {uploadSuccess
+                ? "✅ Upload Complete"
+                : uploading
+                  ? `Uploading... ${progress}%`
+                  : converting
+                    ? "Converting..."
+                    : "Upload"}
+            </button>
+
+            <button
+              onClick={testStorageAccess}
+              disabled={testing}
+              className="nav-btn"
+              style={{
+                padding: "12px 20px",
+                opacity: testing ? 0.5 : 1,
+                cursor: testing ? "not-allowed" : "pointer",
+                backgroundColor: "rgba(197,164,109,0.15)",
+                border: "1px solid rgba(197,164,109,0.3)",
+              }}
+              title="Test access to 'media' storage bucket"
+            >
+              {testing ? "Testing..." : "🔍 Test Storage"}
+            </button>
+          </div>
         </div>
       </div>
     </main>
