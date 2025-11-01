@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
@@ -29,24 +29,48 @@ export default function FeedPage() {
   const [offset, setOffset] = useState(0);
   const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set());
   const { user } = useAuth();
-  const [flashId, setFlashId] = useState<string | null>(null);
+  const lastPostRef = useRef<HTMLDivElement>(null);
+  const observerRef = useRef<IntersectionObserver | null>(null);
 
   useEffect(() => {
     fetchPosts();
     if (user) fetchUserLikes();
   }, [user]);
 
+  useEffect(() => {
+    if (!hasMore || loadingMore) return;
+
+    observerRef.current = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !loadingMore) {
+          fetchPosts(true);
+        }
+      },
+      { threshold: 0.8 }
+    );
+
+    if (lastPostRef.current) {
+      observerRef.current.observe(lastPostRef.current);
+    }
+
+    return () => {
+      if (observerRef.current) {
+        observerRef.current.disconnect();
+      }
+    };
+  }, [posts, hasMore, loadingMore]);
+
   const fetchUserLikes = async () => {
     if (!user) return;
-    
+
     try {
       const { data } = await supabase
         .from("likes")
         .select("post_id")
         .eq("user_id", user.id);
-      
+
       if (data) {
-        setLikedPosts(new Set(data.map(like => like.post_id)));
+        setLikedPosts(new Set(data.map((like) => like.post_id)));
       }
     } catch (error) {
       console.error("Error fetching likes:", error);
@@ -62,14 +86,14 @@ export default function FeedPage() {
       }
 
       const currentOffset = loadMore ? offset : 0;
-      
+
       const { data, error } = await supabase
         .from("posts")
         .select(
           `
           *,
           profiles (username, avatar_url)
-        `,
+        `
         )
         .order("created_at", { ascending: false })
         .range(currentOffset, currentOffset + POSTS_PER_PAGE - 1);
@@ -93,7 +117,14 @@ export default function FeedPage() {
     }
   };
 
-  const handleLike = async (postId: string, currentCount: number) => {
+  const handleLike = async (
+    e: React.MouseEvent,
+    postId: string,
+    currentCount: number
+  ) => {
+    e.preventDefault();
+    e.stopPropagation();
+
     if (!user) return;
 
     const isLiked = likedPosts.has(postId);
@@ -110,14 +141,12 @@ export default function FeedPage() {
     });
 
     setPosts((prev) =>
-      prev.map((p) =>
-        p.id === postId ? { ...p, like_count: newCount } : p,
-      ),
+      prev.map((p) => (p.id === postId ? { ...p, like_count: newCount } : p))
     );
 
     try {
       let likeError;
-      
+
       if (isLiked) {
         const { error } = await supabase
           .from("likes")
@@ -142,7 +171,7 @@ export default function FeedPage() {
       if (updateError) throw updateError;
     } catch (error) {
       console.error("Like failed:", error);
-      
+
       setLikedPosts((prev) => {
         const next = new Set(prev);
         if (isLiked) {
@@ -154,136 +183,265 @@ export default function FeedPage() {
       });
 
       setPosts((prev) =>
-        prev.map((p) => (p.id === postId ? { ...p, like_count: currentCount } : p)),
+        prev.map((p) =>
+          p.id === postId ? { ...p, like_count: currentCount } : p
+        )
       );
     }
   };
 
   if (loading) {
     return (
-      <main className="container">
-        <section className="hero" style={{ paddingBottom: 10 }}>
-          <h1>Feed</h1>
-          <p>Loading feed…</p>
-        </section>
-      </main>
+      <div
+        style={{
+          height: "100dvh",
+          display: "grid",
+          placeItems: "center",
+          background: "#000",
+          color: "white",
+        }}
+      >
+        <p>Loading feed…</p>
+      </div>
     );
   }
 
-  return (
-    <main className="container">
-      <section className="hero" style={{ paddingBottom: 10 }}>
-        <h1>Feed</h1>
-        <p>Browse recent posts.</p>
-      </section>
-
-      <div className="feed-toolbar">
-        <span className="pill pill-active">All</span>
-        <div style={{ marginLeft: "auto" }}>
+  if (posts.length === 0) {
+    return (
+      <div
+        style={{
+          height: "100dvh",
+          display: "grid",
+          placeItems: "center",
+          background: "#000",
+          color: "white",
+          textAlign: "center",
+          padding: 20,
+        }}
+      >
+        <div>
+          <p style={{ marginBottom: 20 }}>No posts yet — be the first to share!</p>
           <Link href="/upload" className="nav-btn">
             + Upload
           </Link>
         </div>
       </div>
+    );
+  }
 
-      <section className="feed-list">
-        {posts.length === 0 ? (
-          <p style={{ opacity: 0.85 }}>
-            No posts yet — be the first to share!
-          </p>
-        ) : (
-          <>
-            {posts.map((post) => {
-              const isLiked = likedPosts.has(post.id);
-              
-              return (
-                <Link
-                  key={post.id}
-                  href={`/post/${post.id}`}
-                  className="post card"
-                  tabIndex={0}
-                >
-                  <header className="post-header">
-                    <div className="avatar" aria-hidden="true">
-                      {(post.profiles?.username?.[0] || "U").toUpperCase()}
-                    </div>
-                    <div>
-                      <div className="post-author">
-                        {post.profiles?.username || "User"}
-                      </div>
-                      <div className="muted">
-                        {new Date(post.created_at).toLocaleString()}
-                      </div>
-                    </div>
-                  </header>
+  return (
+    <div
+      style={{
+        height: "100dvh",
+        overflow: "auto",
+        scrollSnapType: "y mandatory",
+        background: "#000",
+      }}
+    >
+      {posts.map((post, index) => {
+        const isLiked = likedPosts.has(post.id);
+        const isLastPost = index === posts.length - 1;
 
-                  {post.caption && <p className="post-text">{post.caption}</p>}
-
-                  {post.video_url && (
-                    <div className="post-media">
-                      <video
-                        controls
-                        src={post.video_url}
-                        preload="metadata"
-                        style={{ width: "100%", borderRadius: 10, outline: "none" }}
-                      />
-                    </div>
-                  )}
-
-                  {post.image_url && (
-                    <div className="post-media">
-                      <img
-                        src={post.image_url}
-                        alt={post.caption || "Post image"}
-                        style={{ width: "100%", borderRadius: 10 }}
-                      />
-                    </div>
-                  )}
-
-                  <footer className="post-footer">
-                    <button
-                      className={`nav-btn ${flashId === post.id ? "flash" : ""} ${isLiked ? "liked" : ""}`}
-                      onClick={(e) => {
-                        e.preventDefault();
-                        setFlashId(post.id);
-                        handleLike(post.id, post.like_count);
-                        setTimeout(() => setFlashId(null), 500);
-                      }}
-                      style={isLiked ? { color: "var(--accent-gold)" } : {}}
-                    >
-                      {isLiked ? "❤️" : "🤍"} {post.like_count}
-                    </button>
-
-                    <button className="nav-btn outline">
-                      💬 {post.comment_count}
-                    </button>
-
-                    <div className="spacer" />
-
-                    <button className="nav-btn outline">⋯</button>
-                  </footer>
-                </Link>
-              );
-            })}
-            
-            {hasMore && (
-              <div style={{ textAlign: "center", marginTop: 30 }}>
-                <button
-                  onClick={() => fetchPosts(true)}
-                  disabled={loadingMore}
-                  className="nav-btn"
+        return (
+          <div
+            key={post.id}
+            ref={isLastPost ? lastPostRef : null}
+            style={{
+              scrollSnapAlign: "start",
+              minHeight: "100dvh",
+              display: "grid",
+              placeItems: "center",
+              position: "relative",
+              background: "#000",
+            }}
+          >
+            <Link
+              href={`/post/${post.id}`}
+              style={{
+                display: "grid",
+                placeItems: "center",
+                width: "100%",
+                height: "100%",
+                textDecoration: "none",
+                color: "inherit",
+                position: "relative",
+              }}
+            >
+              {post.video_url && (
+                <video
+                  src={post.video_url}
+                  controls
+                  playsInline
+                  muted
+                  preload="metadata"
                   style={{
-                    padding: "12px 30px",
-                    opacity: loadingMore ? 0.5 : 1
+                    maxWidth: "100%",
+                    maxHeight: "100dvh",
+                    width: "auto",
+                    height: "auto",
+                    objectFit: "contain",
+                  }}
+                />
+              )}
+
+              {post.image_url && (
+                <img
+                  src={post.image_url}
+                  alt={post.caption || "Post"}
+                  style={{
+                    maxWidth: "100%",
+                    maxHeight: "100dvh",
+                    width: "auto",
+                    height: "auto",
+                    objectFit: "contain",
+                  }}
+                />
+              )}
+
+              <div
+                style={{
+                  position: "absolute",
+                  bottom: 60,
+                  left: 20,
+                  right: 80,
+                  color: "white",
+                  textShadow: "0 2px 8px rgba(0,0,0,0.8)",
+                  zIndex: 10,
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    marginBottom: 8,
                   }}
                 >
-                  {loadingMore ? "Loading..." : "Load More"}
+                  <div
+                    className="avatar"
+                    style={{ width: 32, height: 32, fontSize: 14 }}
+                  >
+                    {(post.profiles?.username?.[0] || "U").toUpperCase()}
+                  </div>
+                  <div style={{ fontWeight: 600, fontSize: 15 }}>
+                    {post.profiles?.username || "User"}
+                  </div>
+                </div>
+                {post.caption && (
+                  <p style={{ margin: 0, fontSize: 14, lineHeight: 1.4 }}>
+                    {post.caption}
+                  </p>
+                )}
+              </div>
+
+              <div
+                style={{
+                  position: "absolute",
+                  right: 12,
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 20,
+                  zIndex: 10,
+                }}
+              >
+                <button
+                  onClick={(e) => handleLike(e, post.id, post.like_count)}
+                  style={{
+                    background: "rgba(0,0,0,0.5)",
+                    border: "none",
+                    borderRadius: "50%",
+                    width: 56,
+                    height: 56,
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: isLiked ? "var(--accent-gold)" : "white",
+                    cursor: "pointer",
+                    fontSize: 24,
+                    backdropFilter: "blur(10px)",
+                    transition: "transform 0.2s",
+                  }}
+                  onMouseDown={(e) => {
+                    e.currentTarget.style.transform = "scale(0.9)";
+                  }}
+                  onMouseUp={(e) => {
+                    e.currentTarget.style.transform = "scale(1)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = "scale(1)";
+                  }}
+                >
+                  <span>{isLiked ? "❤️" : "🤍"}</span>
+                  <span style={{ fontSize: 12, marginTop: 2 }}>
+                    {post.like_count}
+                  </span>
+                </button>
+
+                <button
+                  onClick={(e) => e.preventDefault()}
+                  style={{
+                    background: "rgba(0,0,0,0.5)",
+                    border: "none",
+                    borderRadius: "50%",
+                    width: 56,
+                    height: 56,
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "white",
+                    cursor: "pointer",
+                    fontSize: 24,
+                    backdropFilter: "blur(10px)",
+                  }}
+                >
+                  <span>💬</span>
+                  <span style={{ fontSize: 12, marginTop: 2 }}>
+                    {post.comment_count}
+                  </span>
+                </button>
+
+                <button
+                  onClick={(e) => e.preventDefault()}
+                  style={{
+                    background: "rgba(0,0,0,0.5)",
+                    border: "none",
+                    borderRadius: "50%",
+                    width: 56,
+                    height: 56,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "white",
+                    cursor: "pointer",
+                    fontSize: 24,
+                    backdropFilter: "blur(10px)",
+                  }}
+                >
+                  ⋯
                 </button>
               </div>
-            )}
-          </>
-        )}
-      </section>
-    </main>
+            </Link>
+          </div>
+        );
+      })}
+
+      {loadingMore && (
+        <div
+          style={{
+            scrollSnapAlign: "start",
+            minHeight: "100dvh",
+            display: "grid",
+            placeItems: "center",
+            color: "white",
+          }}
+        >
+          <p>Loading more...</p>
+        </div>
+      )}
+    </div>
   );
 }
