@@ -55,34 +55,50 @@
     0 6px 24px rgba(0,0,0,.35);
 }
 
-/* Spotlight in the O */
+/* Lamp that replaces the O */
 .splash-logo .logo-top { position: relative; }
-.splash-logo .spot {
+
+.splash-logo .lampO {
   position: relative;
   display: inline-block;
-  width: .58em;
-  height: .58em;
-  margin: -.08em .06em 0 .06em;
-  vertical-align: middle;
+  width: 0.72em;
+  height: 0.72em;
+  margin: 0 .06em;
+  vertical-align: baseline;
+  top: 0.02em;
   border-radius: 50%;
-  background: radial-gradient(circle at 40% 35%, #fff 0%, #ffe5b5 35%, rgba(0,0,0,.2) 80%);
-  box-shadow: 0 0 30px rgba(197,164,109,.55);
+
+  /* Chrome ring + warm lamp core */
+  background:
+    radial-gradient(closest-side, transparent 68%, #cfd3d7 70% 84%, transparent 86%),
+    radial-gradient(circle at 40% 35%, #ffffff 0%, #ffe5b5 35%, rgba(0,0,0,.25) 75%);
+  box-shadow:
+    0 0 30px rgba(197,164,109,.45),
+    0 2px 8px rgba(0,0,0,.35);
 }
-.splash-logo .spot::after {
+
+/* Downward light cone under the lamp O */
+.splash-logo .lampO::after {
   content: "";
   position: absolute;
-  left: 45%;
-  top: 52%;
-  width: 180%;
-  height: 200%;
+  left: 50%;
+  top: 58%;
+  width: 200%;
+  height: 210%;
   transform: translateX(-50%) rotate(14deg);
   pointer-events: none;
   background: radial-gradient(ellipse at 50% 0%,
     rgba(255,225,170,.55) 0%,
-    rgba(255,225,170,.25) 25%,
-    rgba(0,0,0,0) 60%);
+    rgba(255,225,170,.25) 28%,
+    rgba(0,0,0,0) 62%);
   filter: blur(2px);
   opacity: .9;
+}
+
+/* Optional micro-tuning if spacing looks off */
+@media (min-width: 640px) {
+  .splash-logo .logo-top { letter-spacing: .06em; }
+  .splash-logo .lampO { margin: 0 .05em; }
 }
 
 /* Beam */

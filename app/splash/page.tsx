@@ -17,7 +17,7 @@ export default function SplashPage() {
       <div className="splash-logo">
         <span className="beam" aria-hidden />
         <span className="logo-top">
-          RO<span className="spot" />LE
+          R<span className="lampO" aria-label="O" />LE
         </span>
         <span className="logo-bottom">OUT</span>
       </div>

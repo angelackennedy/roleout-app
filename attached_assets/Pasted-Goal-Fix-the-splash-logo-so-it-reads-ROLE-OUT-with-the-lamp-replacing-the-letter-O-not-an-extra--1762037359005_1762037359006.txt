@@ -1,0 +1,68 @@
+Goal: Fix the splash logo so it reads “ROLE OUT” with the lamp replacing the letter O (not an extra O). Update markup and the local splash CSS only.
+
+Files to change:
+1) app/splash/page.tsx
+2) app/splash/splash.css
+
+Requirements:
+- In app/splash/page.tsx, change the top line of the logo from:
+    <span className="logo-top">RO<span className="spot" />LE</span>
+  to:
+    <span className="logo-top">R<span className="lampO" aria-label="O" />LE</span>
+  (i.e., remove the text “O” and use a single <span className="lampO" /> in its place.)
+
+- In app/splash/splash.css, add styles for .lampO that draw a chrome ring and a warm lamp core, and a ::after “light cone” below it. Do NOT edit globals.css. Keep everything scoped here.
+
+Use this CSS (you may tweak only if needed for the current font metrics):
+--------------------------------------------------------------------------------
+/* Lamp that replaces the O */
+.splash-logo .logo-top { position: relative; }
+
+.splash-logo .lampO {
+  position: relative;
+  display: inline-block;
+  width: 0.72em;
+  height: 0.72em;
+  margin: 0 .06em;
+  vertical-align: baseline;
+  top: 0.02em;               /* tiny nudge to center on line */
+  border-radius: 50%;
+
+  /* Chrome ring + warm lamp core */
+  background:
+    radial-gradient(closest-side, transparent 68%, #cfd3d7 70% 84%, transparent 86%), /* chrome ring */
+    radial-gradient(circle at 40% 35%, #ffffff 0%, #ffe5b5 35%, rgba(0,0,0,.25) 75%);  /* lamp glow */
+  box-shadow:
+    0 0 30px rgba(197,164,109,.45),  /* warm bloom */
+    0 2px 8px rgba(0,0,0,.35);       /* depth */
+}
+
+/* Downward light cone under the lamp O */
+.splash-logo .lampO::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 58%;
+  width: 200%;
+  height: 210%;
+  transform: translateX(-50%) rotate(14deg);
+  pointer-events: none;
+  background: radial-gradient(ellipse at 50% 0%,
+    rgba(255,225,170,.55) 0%,
+    rgba(255,225,170,.25) 28%,
+    rgba(0,0,0,0) 62%);
+  filter: blur(2px);
+  opacity: .9;
+}
+
+/* Optional micro-tuning if spacing looks off */
+@media (min-width: 640px) {
+  .splash-logo .logo-top { letter-spacing: .06em; }
+  .splash-logo .lampO { margin: 0 .05em; }
+}
+--------------------------------------------------------------------------------
+
+Deliverables:
+- Apply the page.tsx markup change.
+- Append the CSS block to app/splash/splash.css (do not touch globals.css).
+- Show me the unified diff or the final contents of the two files.
