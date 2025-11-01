@@ -7,7 +7,8 @@ import { useAuth } from "@/lib/auth-context";
 
 interface Post {
   id: string;
-  video_url: string;
+  video_url: string | null;
+  image_url: string | null;
   caption: string | null;
   created_at: string;
   like_count: number;
@@ -173,7 +174,7 @@ export default function FeedPage() {
     <main className="container">
       <section className="hero" style={{ paddingBottom: 10 }}>
         <h1>Feed</h1>
-        <p>Browse recent video posts.</p>
+        <p>Browse recent posts.</p>
       </section>
 
       <div className="feed-toolbar">
@@ -188,7 +189,7 @@ export default function FeedPage() {
       <section className="feed-list">
         {posts.length === 0 ? (
           <p style={{ opacity: 0.85 }}>
-            No posts yet — be the first to share a video!
+            No posts yet — be the first to share!
           </p>
         ) : (
           <>
@@ -220,20 +221,22 @@ export default function FeedPage() {
 
                   {post.video_url && (
                     <div className="post-media">
-                      {post.video_url.match(/\.(mp4|webm|mov)$/i) ? (
-                        <video
-                          controls
-                          src={post.video_url}
-                          preload="metadata"
-                          style={{ width: "100%", borderRadius: 10, outline: "none" }}
-                        />
-                      ) : (
-                        <img
-                          src={post.video_url}
-                          alt={post.caption || "Post image"}
-                          style={{ width: "100%", borderRadius: 10 }}
-                        />
-                      )}
+                      <video
+                        controls
+                        src={post.video_url}
+                        preload="metadata"
+                        style={{ width: "100%", borderRadius: 10, outline: "none" }}
+                      />
+                    </div>
+                  )}
+
+                  {post.image_url && (
+                    <div className="post-media">
+                      <img
+                        src={post.image_url}
+                        alt={post.caption || "Post image"}
+                        style={{ width: "100%", borderRadius: 10 }}
+                      />
                     </div>
                   )}
 
