@@ -24,6 +24,7 @@ interface Comment {
   id: string;
   content: string;
   created_at: string;
+  user_id: string;
   profiles: {
     username: string;
   };
@@ -106,23 +107,43 @@ export default function PostPage() {
       return;
     }
 
+    if (!post) return;
+
+    const wasLiked = liked;
+    const newCount = wasLiked ? post.like_count - 1 : post.like_count + 1;
+
+    setLiked(!wasLiked);
+    setPost({ ...post, like_count: newCount });
+
     try {
-      if (liked) {
-        await supabase
+      let likeError;
+      
+      if (wasLiked) {
+        const { error } = await supabase
           .from('likes')
           .delete()
           .eq('user_id', user.id)
           .eq('post_id', postId);
-        setLiked(false);
+        likeError = error;
       } else {
-        await supabase
+        const { error } = await supabase
           .from('likes')
           .insert({ user_id: user.id, post_id: postId });
-        setLiked(true);
+        likeError = error;
       }
-      fetchPost();
+
+      if (likeError) throw likeError;
+
+      const { error: updateError } = await supabase
+        .from('posts')
+        .update({ like_count: newCount })
+        .eq('id', postId);
+
+      if (updateError) throw updateError;
     } catch (error) {
       console.error('Error toggling like:', error);
+      setLiked(wasLiked);
+      setPost({ ...post, like_count: post.like_count });
     }
   };
 
@@ -130,20 +151,46 @@ export default function PostPage() {
     e.preventDefault();
     if (!user || !newComment.trim()) return;
 
+    const optimisticComment: Comment = {
+      id: 'temp-' + Date.now(),
+      content: newComment.trim(),
+      created_at: new Date().toISOString(),
+      user_id: user.id,
+      profiles: {
+        username: user.email?.split('@')[0] || 'User',
+      },
+    };
+
+    setComments([...comments, optimisticComment]);
+    setNewComment('');
+
+    if (post) {
+      setPost({ ...post, comment_count: post.comment_count + 1 });
+    }
+
     try {
-      await supabase
+      const { error } = await supabase
         .from('comments')
         .insert({
           user_id: user.id,
           post_id: postId,
-          content: newComment.trim(),
+          content: optimisticComment.content,
         });
 
-      setNewComment('');
+      if (error) throw error;
+
+      await supabase
+        .from('posts')
+        .update({ comment_count: (post?.comment_count || 0) + 1 })
+        .eq('id', postId);
+
       fetchComments();
-      fetchPost();
     } catch (error) {
       console.error('Error posting comment:', error);
+      setComments(comments);
+      if (post) {
+        setPost({ ...post, comment_count: post.comment_count });
+      }
     }
   };
 
@@ -174,128 +221,143 @@ export default function PostPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-xl">Loading post...</div>
-      </div>
+      <main className="container">
+        <section className="hero">
+          <p>Loading post...</p>
+        </section>
+      </main>
     );
   }
 
   if (!post) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-xl">Post not found</div>
-      </div>
+      <main className="container">
+        <section className="hero">
+          <h1>Post not found</h1>
+          <Link href="/feed" className="nav-btn">← Back to Feed</Link>
+        </section>
+      </main>
     );
   }
 
+  const isVideo = post.video_url.match(/\.(mp4|webm|mov)$/i);
+
   return (
-    <div className="min-h-screen py-8">
-      <div className="max-w-4xl mx-auto px-4">
-        <Link href="/feed" className="text-blue-600 hover:text-blue-700 mb-4 inline-block">
+    <main className="container">
+      <div style={{ marginBottom: 20 }}>
+        <Link href="/feed" className="nav-btn outline">
           ← Back to Feed
         </Link>
+      </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          <div>
-            <div className="aspect-video bg-black rounded-lg overflow-hidden">
-              <video
-                src={post.video_url}
-                className="w-full h-full object-contain"
-                controls
-                autoPlay
-                loop
-              />
-            </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 30, maxWidth: 900 }}>
+        <div className="card">
+          {isVideo ? (
+            <video
+              src={post.video_url}
+              controls
+              autoPlay
+              loop
+              style={{ width: '100%', borderRadius: 10, backgroundColor: '#000' }}
+            />
+          ) : (
+            <img
+              src={post.video_url}
+              alt={post.caption || 'Post'}
+              style={{ width: '100%', borderRadius: 10 }}
+            />
+          )}
 
-            <div className="mt-4 flex items-center justify-between">
-              <button
-                onClick={handleLike}
-                className={`flex items-center gap-2 px-4 py-2 rounded-md ${
-                  liked ? 'bg-red-100 text-red-600' : 'bg-gray-100 dark:bg-gray-800'
-                }`}
-              >
-                {liked ? '❤️' : '🤍'} {post.like_count}
-              </button>
+          <div style={{ marginTop: 20, display: 'flex', gap: 10, alignItems: 'center' }}>
+            <button
+              onClick={handleLike}
+              className="nav-btn"
+              style={liked ? { color: 'var(--accent-gold)' } : {}}
+            >
+              {liked ? '❤️' : '🤍'} {post.like_count}
+            </button>
 
-              <button
-                onClick={handleFlag}
-                className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
-              >
+            <button className="nav-btn outline">
+              💬 {post.comment_count}
+            </button>
+
+            <div style={{ marginLeft: 'auto' }}>
+              <button onClick={handleFlag} className="nav-btn outline">
                 🚩 Flag
               </button>
             </div>
           </div>
 
-          <div className="space-y-4">
-            <div className="border-b border-gray-200 dark:border-gray-800 pb-4">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="w-10 h-10 rounded-full bg-gray-300 dark:bg-gray-700 flex items-center justify-center">
-                  {post.profiles.avatar_url ? (
-                    <img
-                      src={post.profiles.avatar_url}
-                      alt={post.profiles.username}
-                      className="w-full h-full rounded-full object-cover"
-                    />
-                  ) : (
-                    <span className="font-semibold">
-                      {post.profiles.username[0].toUpperCase()}
-                    </span>
-                  )}
-                </div>
-                <div>
-                  <Link
-                    href={`/profile/${post.user_id}`}
-                    className="font-semibold hover:text-blue-600"
-                  >
-                    {post.profiles.username}
-                  </Link>
-                  <p className="text-sm text-gray-500">
-                    {new Date(post.created_at).toLocaleDateString()}
-                  </p>
+          <div style={{ marginTop: 20, paddingTop: 20, borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 10 }}>
+              <div className="avatar" style={{ width: 40, height: 40 }}>
+                {post.profiles.username[0].toUpperCase()}
+              </div>
+              <div>
+                <Link
+                  href={`/profile/${post.user_id}`}
+                  style={{ fontWeight: 600 }}
+                >
+                  {post.profiles.username}
+                </Link>
+                <div style={{ fontSize: '0.9em', opacity: 0.7 }}>
+                  {new Date(post.created_at).toLocaleDateString()}
                 </div>
               </div>
-              
-              {post.caption && (
-                <p className="text-gray-700 dark:text-gray-300">{post.caption}</p>
-              )}
             </div>
+            
+            {post.caption && (
+              <p style={{ marginTop: 10 }}>{post.caption}</p>
+            )}
+          </div>
+        </div>
 
-            <div className="space-y-4">
-              <h3 className="font-semibold">Comments ({post.comment_count})</h3>
+        <div className="card">
+          <h3 style={{ marginBottom: 20 }}>Comments ({post.comment_count})</h3>
 
-              {user && (
-                <form onSubmit={handleComment} className="flex gap-2">
-                  <input
-                    type="text"
-                    value={newComment}
-                    onChange={(e) => setNewComment(e.target.value)}
-                    placeholder="Add a comment..."
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-md dark:bg-gray-800 dark:border-gray-700"
-                  />
-                  <button
-                    type="submit"
-                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-                  >
-                    Post
-                  </button>
-                </form>
-              )}
+          {user && (
+            <form onSubmit={handleComment} style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
+              <input
+                type="text"
+                value={newComment}
+                onChange={(e) => setNewComment(e.target.value)}
+                placeholder="Add a comment..."
+                style={{
+                  flex: 1,
+                  padding: 10,
+                  borderRadius: 6,
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  backgroundColor: 'rgba(255,255,255,0.05)',
+                  color: 'inherit',
+                }}
+              />
+              <button type="submit" className="nav-btn">
+                Post
+              </button>
+            </form>
+          )}
 
-              <div className="space-y-3 max-h-96 overflow-y-auto">
-                {comments.map((comment) => (
-                  <div key={comment.id} className="border-l-2 border-gray-200 dark:border-gray-800 pl-3">
-                    <p className="font-semibold text-sm">{comment.profiles.username}</p>
-                    <p className="text-gray-700 dark:text-gray-300">{comment.content}</p>
-                    <p className="text-xs text-gray-500 mt-1">
-                      {new Date(comment.created_at).toLocaleString()}
-                    </p>
-                  </div>
-                ))}
+          <div style={{ display: 'grid', gap: 15 }}>
+            {comments.map((comment) => (
+              <div
+                key={comment.id}
+                style={{
+                  paddingLeft: 15,
+                  borderLeft: '2px solid rgba(255,255,255,0.2)'
+                }}
+              >
+                <div style={{ fontWeight: 600, fontSize: '0.95em' }}>
+                  {comment.profiles.username}
+                </div>
+                <p style={{ marginTop: 5 }}>{comment.content}</p>
+                <div style={{ fontSize: '0.85em', opacity: 0.6, marginTop: 5 }}>
+                  {new Date(comment.created_at).toLocaleString()}
+                </div>
               </div>
-            </div>
+            ))}
           </div>
         </div>
       </div>
-    </div>
+    </main>
   );
 }

@@ -1,47 +1,18 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 
 export default function UploadPage() {
-  const [videoFile, setVideoFile] = useState<File | null>(null);
-  const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [file, setFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string>("");
   const [caption, setCaption] = useState("");
-  const [trimStart, setTrimStart] = useState(0);
-  const [trimEnd, setTrimEnd] = useState(60);
-  const [duration, setDuration] = useState(0);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
-  const videoRef = useRef<HTMLVideoElement>(null);
   const { user } = useAuth();
-  const router = useRouter(); // === Universal Upload Preview Handler ===
-  const [previewUrl, setPreviewUrl] = useState("");
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [formatNote, setFormatNote] = useState("");
-
-  function browserCanPlay(file: File) {
-    const v = document.createElement("video");
-    return !!(file.type && v.canPlayType(file.type));
-  }
-
-  function onSelectFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[0];
-    if (!f) return;
-
-    setSelectedFile(f);
-    const url = URL.createObjectURL(f);
-    setPreviewUrl(url);
-
-    if (!browserCanPlay(f)) {
-      setFormatNote(
-        "⚠️ This format may play audio only (HEVC/MOV). Convert to MP4 (H.264 + AAC) for full preview.",
-      );
-    } else {
-      setFormatNote("");
-    }
-  }
+  const router = useRouter();
 
   useEffect(() => {
     if (!user) {
@@ -50,237 +21,161 @@ export default function UploadPage() {
   }, [user, router]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      if (!file.type.startsWith("video/")) {
-        setError("Please select a valid video file");
-        return;
-      }
-      setVideoFile(file);
-      setVideoUrl(URL.createObjectURL(file));
-      setError("");
-    }
-  };
+    const selectedFile = e.target.files?.[0];
+    if (!selectedFile) return;
 
-  const handleLoadedMetadata = () => {
-    if (videoRef.current) {
-      const videoDuration = videoRef.current.duration;
-      setDuration(videoDuration);
-      setTrimEnd(Math.min(videoDuration, 60));
-    }
-  };
-
-  const trimVideo = async (): Promise<Blob | null> => {
-    if (!videoFile || !videoRef.current) return null;
-
-    const trimDuration = trimEnd - trimStart;
-    if (trimDuration > 60) {
-      setError("Video cannot be longer than 60 seconds");
-      return null;
+    if (!selectedFile.type.startsWith("video/") && !selectedFile.type.startsWith("image/")) {
+      setError("Please select a valid video or image file");
+      return;
     }
 
-    const video = videoRef.current;
-    const canvas = document.createElement("canvas");
-    const ctx = canvas.getContext("2d");
-
-    if (!ctx) return null;
-
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-
-    const stream = canvas.captureStream(30);
-    const mediaRecorder = new MediaRecorder(stream, {
-      mimeType: "video/webm;codecs=vp9",
-    });
-
-    const chunks: Blob[] = [];
-
-    return new Promise((resolve) => {
-      mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) {
-          chunks.push(e.data);
-        }
-      };
-
-      mediaRecorder.onstop = () => {
-        const blob = new Blob(chunks, { type: "video/webm" });
-        resolve(blob);
-      };
-
-      video.currentTime = trimStart;
-
-      video.onseeked = () => {
-        mediaRecorder.start();
-
-        const interval = setInterval(() => {
-          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-          if (video.currentTime >= trimEnd) {
-            clearInterval(interval);
-            mediaRecorder.stop();
-          }
-        }, 1000 / 30);
-
-        video.play();
-      };
-    });
+    setFile(selectedFile);
+    setPreviewUrl(URL.createObjectURL(selectedFile));
+    setError("");
   };
 
   const handleUpload = async () => {
-    if (!user || !videoFile) return;
+    if (!user) {
+      setError("You must be signed in to upload.");
+      return;
+    }
+    if (!file) {
+      setError("Please select a file first.");
+      return;
+    }
 
     setUploading(true);
     setError("");
 
     try {
-      let uploadBlob: Blob = videoFile;
-
-      if (trimEnd - trimStart < duration) {
-        const trimmedBlob = await trimVideo();
-        if (!trimmedBlob) {
-          throw new Error("Failed to trim video");
-        }
-        uploadBlob = trimmedBlob;
-      }
-
-      const finalDuration = trimEnd - trimStart;
-      if (finalDuration > 60) {
-        setError("Video must be 60 seconds or less");
-        setUploading(false);
-        return;
-      }
-
-      const fileName = `${user.id}/${Date.now()}.webm`;
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${user.id}/${Date.now()}.${fileExt}`;
 
       const { error: uploadError } = await supabase.storage
-        .from("videos")
-        .upload(fileName, uploadBlob);
+        .from("media")
+        .upload(fileName, file, { contentType: file.type });
 
       if (uploadError) throw uploadError;
 
-      const {
-        data: { publicUrl },
-      } = supabase.storage.from("videos").getPublicUrl(fileName);
+      const { data } = supabase.storage.from("media").getPublicUrl(fileName);
+      const publicUrl = data.publicUrl;
 
-      const { error: insertError } = await supabase.from("posts").insert({
+      const { error: dbError } = await supabase.from("posts").insert({
         user_id: user.id,
         video_url: publicUrl,
-        caption: caption || null,
+        caption: caption.trim() || null,
+        like_count: 0,
+        comment_count: 0,
       });
 
-      if (insertError) throw insertError;
+      if (dbError) throw dbError;
 
       router.push("/feed");
-    } catch (err: any) {
-      setError(err.message || "Failed to upload video");
+    } catch (e: any) {
+      console.error(e);
+      setError(e.message || "Upload failed");
+    } finally {
       setUploading(false);
     }
   };
 
   if (!user) return null;
 
-  return (
-    <div className="min-h-screen py-8">
-      <div className="max-w-2xl mx-auto px-4">
-        <h1 className="text-3xl font-bold mb-8">Upload Video</h1>
+  const isVideo = file?.type.startsWith("video/");
+  const isImage = file?.type.startsWith("image/");
 
-        <div className="space-y-6">
+  return (
+    <main className="container">
+      <section className="hero" style={{ paddingBottom: 20 }}>
+        <h1>Upload</h1>
+        <p>Share a video or image (max 60s for video)</p>
+      </section>
+
+      <div className="card" style={{ maxWidth: 600, margin: "0 auto" }}>
+        <div style={{ display: "grid", gap: 20 }}>
           <div>
-            <label className="block text-sm font-medium mb-2">
-              Select Video File
+            <label style={{ display: "block", marginBottom: 8, fontWeight: 500 }}>
+              Select File
             </label>
             <input
               type="file"
               accept="video/*,image/*"
-              onChange={onSelectFile}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md dark:bg-gray-800 dark:border-gray-700"
+              onChange={handleFileChange}
+              className="nav-btn"
+              style={{ width: "100%" }}
             />
           </div>
 
-          {videoUrl && (
-            <>
-              <div>
-                <label className="block text-sm font-medium mb-2">
-                  Preview & Trim (max 60 seconds)
-                </label>
+          {previewUrl && (
+            <div>
+              <label style={{ display: "block", marginBottom: 8, fontWeight: 500 }}>
+                Preview
+              </label>
+              {isVideo && (
                 <video
-                  ref={videoRef}
-                  src={videoUrl}
-                  className="w-full rounded-lg bg-black"
+                  src={previewUrl}
                   controls
-                  onLoadedMetadata={handleLoadedMetadata}
+                  style={{ width: "100%", borderRadius: 10, backgroundColor: "#000" }}
                 />
-              </div>
-
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium mb-2">
-                    Trim Start: {trimStart.toFixed(1)}s
-                  </label>
-                  <input
-                    type="range"
-                    min="0"
-                    max={duration}
-                    step="0.1"
-                    value={trimStart}
-                    onChange={(e) => setTrimStart(parseFloat(e.target.value))}
-                    className="w-full"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-2">
-                    Trim End: {trimEnd.toFixed(1)}s
-                  </label>
-                  <input
-                    type="range"
-                    min="0"
-                    max={duration}
-                    step="0.1"
-                    value={trimEnd}
-                    onChange={(e) => setTrimEnd(parseFloat(e.target.value))}
-                    className="w-full"
-                  />
-                </div>
-
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  Final duration: {(trimEnd - trimStart).toFixed(1)}s
-                  {trimEnd - trimStart > 60 && (
-                    <span className="text-red-600"> (exceeds 60s limit)</span>
-                  )}
-                </p>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-2">
-                  Caption (optional)
-                </label>
-                <textarea
-                  value={caption}
-                  onChange={(e) => setCaption(e.target.value)}
-                  rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md dark:bg-gray-800 dark:border-gray-700"
-                  placeholder="Add a caption..."
+              )}
+              {isImage && (
+                <img
+                  src={previewUrl}
+                  alt="Preview"
+                  style={{ width: "100%", borderRadius: 10 }}
                 />
-              </div>
-            </>
+              )}
+            </div>
           )}
 
+          <div>
+            <label style={{ display: "block", marginBottom: 8, fontWeight: 500 }}>
+              Caption (optional)
+            </label>
+            <textarea
+              value={caption}
+              onChange={(e) => setCaption(e.target.value)}
+              rows={3}
+              placeholder="Add a caption..."
+              style={{
+                width: "100%",
+                padding: 10,
+                borderRadius: 6,
+                border: "1px solid rgba(255,255,255,0.1)",
+                backgroundColor: "rgba(255,255,255,0.05)",
+                color: "inherit",
+                fontFamily: "inherit",
+              }}
+            />
+          </div>
+
           {error && (
-            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+            <div style={{ 
+              padding: 12, 
+              borderRadius: 6, 
+              backgroundColor: "rgba(255,0,0,0.1)",
+              color: "#ff6b6b",
+              border: "1px solid rgba(255,0,0,0.2)"
+            }}>
               {error}
             </div>
           )}
 
           <button
             onClick={handleUpload}
-            disabled={!videoFile || uploading || trimEnd - trimStart > 60}
-            className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={!file || uploading}
+            className="nav-btn"
+            style={{
+              width: "100%",
+              padding: "12px 20px",
+              opacity: !file || uploading ? 0.5 : 1,
+              cursor: !file || uploading ? "not-allowed" : "pointer"
+            }}
           >
-            {uploading ? "Uploading..." : "Upload Video"}
+            {uploading ? "Uploading..." : "Upload"}
           </button>
         </div>
       </div>
-    </div>
+    </main>
   );
 }
