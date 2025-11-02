@@ -83,6 +83,21 @@ export default function UploadPage() {
     }
   }, [user, router]);
 
+  const resetForm = () => {
+    setFile(null);
+    setSafeFile(null);
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+    }
+    setPreviewUrl("");
+    setCaption("");
+    setProgress(0);
+    setConvertProgress(0);
+    setError("");
+    setFormatNote("");
+    setTestResult("");
+  };
+
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
     if (!selectedFile) return;
@@ -217,6 +232,10 @@ export default function UploadPage() {
       const { data } = supabase.storage.from("media").getPublicUrl(fileName);
       const publicUrl = data.publicUrl;
 
+      if (!publicUrl) {
+        throw new Error("Failed to get public URL");
+      }
+
       const { error: dbError } = await supabase.from("posts").insert({
         user_id: user.id,
         video_url: isVideo ? publicUrl : null,
@@ -235,6 +254,8 @@ export default function UploadPage() {
       setProgress(100);
 
       setTimeout(() => {
+        resetForm();
+        setUploadSuccess(false);
         router.push("/feed");
       }, 1500);
     } catch (e: any) {
@@ -397,7 +418,7 @@ export default function UploadPage() {
                 }}
               >
                 <span>
-                  {uploadSuccess ? "✅ Uploaded successfully" : "Uploading..."}
+                  {uploadSuccess ? "✅ Uploaded successfully!" : "Uploading..."}
                 </span>
                 <span>{progress}%</span>
               </div>
