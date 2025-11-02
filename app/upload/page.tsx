@@ -172,14 +172,22 @@ export default function UploadPage() {
         if (xhr.status >= 200 && xhr.status < 300) {
           resolve();
         } else {
-          const errorMsg = xhr.responseText || xhr.statusText || "Unknown upload error";
+          let errorMsg = xhr.statusText || "Upload failed";
+          try {
+            const errorResponse = JSON.parse(xhr.responseText);
+            errorMsg = errorResponse.message || errorResponse.error || errorMsg;
+          } catch (e) {
+            if (xhr.responseText) {
+              errorMsg = xhr.responseText;
+            }
+          }
           console.error("Upload XHR error:", {
             status: xhr.status,
             statusText: xhr.statusText,
             responseText: xhr.responseText,
             response: xhr.response,
           });
-          reject(new Error(`Upload failed (${xhr.status}): ${errorMsg}`));
+          reject(new Error(errorMsg));
         }
       });
 
@@ -189,7 +197,7 @@ export default function UploadPage() {
           statusText: xhr.statusText,
           responseText: xhr.responseText,
         });
-        reject(new Error(`Network error: ${xhr.statusText || "Failed to upload"}`));
+        reject(new Error("Network error occurred"));
       });
 
       xhr.open(
