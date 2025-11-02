@@ -1,0 +1,27 @@
+Enhance the feed visuals in `app/feed/page.tsx` with cinematic polish, keeping all styles inline or co-located (no globals.css changes).
+
+Goals:
+1) Background: add a dark chrome backdrop with a soft vignette and subtle gold glow behind the scrolling area.
+2) Post card: each post occupies the full viewport (100dvh) with a soft shadow/frame and rounded corners; media centered.
+3) Smooth entry animation: posts fade+scale+lift in when they enter the viewport, and reset when out (IntersectionObserver). CSS: opacity:0; transform: translateY(20px) scale(.98) → opacity:1; translateY(0) scale(1).
+4) Video behavior: auto-play when in view (muted, playsInline), pause when out of view. Keep image posts supported.
+5) Overlay buttons: on hover/tap, scale to 1.08 with a subtle glow; when Like count changes, give the heart a quick “pop” animation.
+6) Keep snap scrolling behavior and pagination working. Do not touch globals.css; put any CSS in a <style jsx global> block inside this file or small styled objects.
+7) Preserve existing local/supabase branching; do not break Local Mode.
+
+Implementation hints:
+- Create an IntersectionObserver that toggles class "inview" on the wrapper of each post.
+- In the effect, when a post becomes inview: for video elements inside it, call play(); when it leaves, call pause().
+- Use a single <style jsx global> block at the bottom of the component with the keyframes:
+  @keyframes inFade { 0%{opacity:0; transform: translateY(20px) scale(.98)} 100%{opacity:1; transform: translateY(0) scale(1)} }
+  @keyframes pop { 0%{ transform: scale(1)} 50%{ transform: scale(1.18)} 100%{ transform: scale(1)} }
+- Default state for .postFrame is 'not inview': opacity:0; transform: translateY(20px) scale(.98); when .postFrame.inview → animation: inFade .5s ease forwards.
+- Background: wrap the scroller in a container with position:relative and add an absolutely-positioned ::before gradient (or a separate div) using radial + linear gradients.
+
+Deliverable:
+- Return the full updated `app/feed/page.tsx` with:
+  - the scroll container + background layer
+  - the observer effect
+  - auto-play/pause logic
+  - overlay button hover/pop animations
+  - the <style jsx global> with the keyframes and small class rules

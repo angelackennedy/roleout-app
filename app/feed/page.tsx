@@ -378,9 +378,13 @@ export default function FeedPage() {
   const [commentDrawerPostId, setCommentDrawerPostId] = useState<string | null>(
     null
   );
+  const [likeAnimations, setLikeAnimations] = useState<Set<string>>(new Set());
   const { user } = useAuth();
   const lastPostRef = useRef<HTMLDivElement>(null);
-  const observerRef = useRef<IntersectionObserver | null>(null);
+  const paginationObserverRef = useRef<IntersectionObserver | null>(null);
+  const viewportObserverRef = useRef<IntersectionObserver | null>(null);
+  const postRefsMap = useRef<Map<string, HTMLDivElement>>(new Map());
+  const videoRefsMap = useRef<Map<string, HTMLVideoElement>>(new Map());
 
   useEffect(() => {
     fetchPosts();
@@ -390,7 +394,7 @@ export default function FeedPage() {
   useEffect(() => {
     if (!hasMore || loadingMore) return;
 
-    observerRef.current = new IntersectionObserver(
+    paginationObserverRef.current = new IntersectionObserver(
       (entries) => {
         if (entries[0].isIntersecting && hasMore && !loadingMore) {
           fetchPosts(true);
@@ -400,15 +404,54 @@ export default function FeedPage() {
     );
 
     if (lastPostRef.current) {
-      observerRef.current.observe(lastPostRef.current);
+      paginationObserverRef.current.observe(lastPostRef.current);
     }
 
     return () => {
-      if (observerRef.current) {
-        observerRef.current.disconnect();
+      if (paginationObserverRef.current) {
+        paginationObserverRef.current.disconnect();
       }
     };
   }, [posts, hasMore, loadingMore]);
+
+  useEffect(() => {
+    viewportObserverRef.current = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          const postId = entry.target.getAttribute("data-post-id");
+          if (!postId) return;
+
+          const postElement = entry.target as HTMLDivElement;
+          const videoElement = videoRefsMap.current.get(postId);
+
+          if (entry.isIntersecting) {
+            postElement.classList.add("inview");
+            if (videoElement) {
+              videoElement.play().catch(() => {});
+            }
+          } else {
+            postElement.classList.remove("inview");
+            if (videoElement) {
+              videoElement.pause();
+            }
+          }
+        });
+      },
+      { threshold: 0.5 }
+    );
+
+    postRefsMap.current.forEach((element) => {
+      if (viewportObserverRef.current) {
+        viewportObserverRef.current.observe(element);
+      }
+    });
+
+    return () => {
+      if (viewportObserverRef.current) {
+        viewportObserverRef.current.disconnect();
+      }
+    };
+  }, [posts]);
 
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
@@ -493,6 +536,17 @@ export default function FeedPage() {
     }
   };
 
+  const triggerLikeAnimation = (postId: string) => {
+    setLikeAnimations((prev) => new Set(prev).add(postId));
+    setTimeout(() => {
+      setLikeAnimations((prev) => {
+        const next = new Set(prev);
+        next.delete(postId);
+        return next;
+      });
+    }, 400);
+  };
+
   const handleLike = async (
     e: React.MouseEvent,
     postId: string,
@@ -500,6 +554,8 @@ export default function FeedPage() {
   ) => {
     e.preventDefault();
     e.stopPropagation();
+
+    triggerLikeAnimation(postId);
 
     if (MODE === "local") {
       setPosts((prev) =>
@@ -662,7 +718,7 @@ export default function FeedPage() {
           height: "100dvh",
           display: "grid",
           placeItems: "center",
-          background: "#000",
+          background: "radial-gradient(ellipse at center, #1a1a1a 0%, #000 70%)",
           color: "white",
         }}
       >
@@ -678,7 +734,7 @@ export default function FeedPage() {
           height: "100dvh",
           display: "grid",
           placeItems: "center",
-          background: "#000",
+          background: "radial-gradient(ellipse at center, #1a1a1a 0%, #000 70%)",
           color: "white",
           textAlign: "center",
           padding: 20,
@@ -698,217 +754,279 @@ export default function FeedPage() {
     <>
       <div
         style={{
+          position: "relative",
           height: "100dvh",
-          overflow: "auto",
-          scrollSnapType: "y mandatory",
-          background: "#000",
+          overflow: "hidden",
         }}
       >
-        {posts.map((post, index) => {
-          const isLiked = likedPosts.has(post.id);
-          const isLastPost = index === posts.length - 1;
-          const mediaUrl = getPostMediaUrl(post);
-          const postIsVideo = isVideo(post);
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            background: `
+              radial-gradient(ellipse at 50% 50%, rgba(212, 175, 55, 0.08) 0%, transparent 50%),
+              radial-gradient(ellipse at center, #1a1a1a 0%, #0a0a0a 50%, #000 100%)
+            `,
+            pointerEvents: "none",
+            zIndex: 0,
+          }}
+        />
 
-          return (
-            <div
-              key={post.id}
-              ref={isLastPost ? lastPostRef : null}
-              style={{
-                scrollSnapAlign: "start",
-                minHeight: "100dvh",
-                display: "grid",
-                placeItems: "center",
-                position: "relative",
-                background: "#000",
-              }}
-            >
-              <Link
-                href={MODE === "local" ? "#" : `/post/${post.id}`}
-                onClick={(e) => MODE === "local" && e.preventDefault()}
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            background: `
+              radial-gradient(ellipse at center, transparent 0%, transparent 60%, rgba(0,0,0,0.6) 100%)
+            `,
+            pointerEvents: "none",
+            zIndex: 1,
+          }}
+        />
+
+        <div
+          style={{
+            position: "relative",
+            height: "100dvh",
+            overflow: "auto",
+            scrollSnapType: "y mandatory",
+            zIndex: 2,
+          }}
+        >
+          {posts.map((post, index) => {
+            const isLiked = likedPosts.has(post.id);
+            const isLastPost = index === posts.length - 1;
+            const mediaUrl = getPostMediaUrl(post);
+            const postIsVideo = isVideo(post);
+            const hasLikeAnimation = likeAnimations.has(post.id);
+
+            return (
+              <div
+                key={post.id}
+                ref={(el) => {
+                  if (el) {
+                    postRefsMap.current.set(post.id, el);
+                  }
+                  if (isLastPost && el) {
+                    lastPostRef.current = el;
+                  }
+                }}
+                data-post-id={post.id}
+                className="postFrame"
                 style={{
-                  display: "grid",
-                  placeItems: "center",
-                  width: "100%",
-                  height: "100%",
-                  textDecoration: "none",
-                  color: "inherit",
+                  scrollSnapAlign: "start",
+                  minHeight: "100dvh",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
                   position: "relative",
+                  padding: "20px",
                 }}
               >
-                {postIsVideo ? (
-                  <video
-                    src={mediaUrl}
-                    controls
-                    playsInline
-                    muted
-                    preload="metadata"
-                    style={{
-                      maxWidth: "100%",
-                      maxHeight: "100dvh",
-                      width: "auto",
-                      height: "auto",
-                      objectFit: "contain",
-                    }}
-                  />
-                ) : (
-                  <img
-                    src={mediaUrl}
-                    alt={getPostCaption(post)}
-                    style={{
-                      maxWidth: "100%",
-                      maxHeight: "100dvh",
-                      width: "auto",
-                      height: "auto",
-                      objectFit: "contain",
-                    }}
-                  />
-                )}
-
                 <div
                   style={{
-                    position: "absolute",
-                    bottom: 60,
-                    left: 20,
-                    right: 80,
-                    color: "white",
-                    textShadow: "0 2px 8px rgba(0,0,0,0.8)",
-                    zIndex: 10,
+                    position: "relative",
+                    width: "100%",
+                    maxWidth: "min(100%, 600px)",
+                    height: "calc(100dvh - 40px)",
+                    background: "rgba(0,0,0,0.4)",
+                    borderRadius: 16,
+                    overflow: "hidden",
+                    boxShadow: `
+                      0 20px 60px rgba(0,0,0,0.8),
+                      0 0 0 1px rgba(255,255,255,0.05),
+                      0 0 40px rgba(212, 175, 55, 0.1)
+                    `,
                   }}
                 >
-                  <div
+                  <Link
+                    href={MODE === "local" ? "#" : `/post/${post.id}`}
+                    onClick={(e) => MODE === "local" && e.preventDefault()}
                     style={{
                       display: "flex",
                       alignItems: "center",
-                      gap: 10,
-                      marginBottom: 8,
+                      justifyContent: "center",
+                      width: "100%",
+                      height: "100%",
+                      textDecoration: "none",
+                      color: "inherit",
+                      position: "relative",
                     }}
                   >
+                    {postIsVideo ? (
+                      <video
+                        ref={(el) => {
+                          if (el) {
+                            videoRefsMap.current.set(post.id, el);
+                          }
+                        }}
+                        src={mediaUrl}
+                        loop
+                        playsInline
+                        muted
+                        preload="metadata"
+                        style={{
+                          width: "100%",
+                          height: "100%",
+                          objectFit: "contain",
+                        }}
+                      />
+                    ) : (
+                      <img
+                        src={mediaUrl}
+                        alt={getPostCaption(post)}
+                        style={{
+                          width: "100%",
+                          height: "100%",
+                          objectFit: "contain",
+                        }}
+                      />
+                    )}
+
                     <div
-                      className="avatar"
-                      style={{ width: 32, height: 32, fontSize: 14 }}
+                      style={{
+                        position: "absolute",
+                        right: 12,
+                        top: "50%",
+                        transform: "translateY(-50%)",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 20,
+                        zIndex: 10,
+                      }}
                     >
-                      {getUsername(post)[0].toUpperCase()}
+                      <button
+                        onClick={(e) => handleLike(e, post.id, getPostLikeCount(post))}
+                        className="actionBtn"
+                        style={{
+                          background: "rgba(0,0,0,0.5)",
+                          backdropFilter: "blur(10px)",
+                          border: "1px solid rgba(255,255,255,0.2)",
+                          borderRadius: 50,
+                          width: 56,
+                          height: 56,
+                          display: "flex",
+                          flexDirection: "column",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          color: "white",
+                          cursor: "pointer",
+                          transition: "all 0.3s ease",
+                        }}
+                      >
+                        <span
+                          className={hasLikeAnimation ? "likeIcon" : ""}
+                          style={{ fontSize: 24, lineHeight: 1 }}
+                        >
+                          {isLiked ? "❤️" : "🤍"}
+                        </span>
+                        <span style={{ fontSize: 12, fontWeight: 600, marginTop: 4 }}>
+                          {getPostLikeCount(post)}
+                        </span>
+                      </button>
+
+                      <button
+                        onClick={(e) => handleOpenComments(e, post.id)}
+                        className="actionBtn"
+                        style={{
+                          background: "rgba(0,0,0,0.5)",
+                          backdropFilter: "blur(10px)",
+                          border: "1px solid rgba(255,255,255,0.2)",
+                          borderRadius: 50,
+                          width: 56,
+                          height: 56,
+                          display: "flex",
+                          flexDirection: "column",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          color: "white",
+                          cursor: "pointer",
+                          transition: "all 0.3s ease",
+                        }}
+                      >
+                        <span style={{ fontSize: 24, lineHeight: 1 }}>💬</span>
+                        <span style={{ fontSize: 12, fontWeight: 600, marginTop: 4 }}>
+                          {getPostCommentCount(post)}
+                        </span>
+                      </button>
+
+                      <button
+                        className="actionBtn"
+                        onClick={(e) => e.preventDefault()}
+                        style={{
+                          background: "rgba(0,0,0,0.5)",
+                          backdropFilter: "blur(10px)",
+                          border: "1px solid rgba(255,255,255,0.2)",
+                          borderRadius: 50,
+                          width: 56,
+                          height: 56,
+                          display: "flex",
+                          flexDirection: "column",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          color: "white",
+                          cursor: "pointer",
+                          transition: "all 0.3s ease",
+                        }}
+                      >
+                        <span style={{ fontSize: 24, lineHeight: 1 }}>⋯</span>
+                      </button>
                     </div>
-                    <div style={{ fontWeight: 600, fontSize: 15 }}>
-                      {getUsername(post)}
+
+                    <div
+                      style={{
+                        position: "absolute",
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        padding: "30px 20px 20px 20px",
+                        background: "linear-gradient(to top, rgba(0,0,0,0.8) 0%, transparent 100%)",
+                        color: "white",
+                        zIndex: 10,
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 10,
+                          marginBottom: 8,
+                        }}
+                      >
+                        <div
+                          className="avatar"
+                          style={{ width: 32, height: 32, fontSize: 14 }}
+                        >
+                          {getUsername(post)[0].toUpperCase()}
+                        </div>
+                        <div style={{ fontWeight: 600, fontSize: 15 }}>
+                          {getUsername(post)}
+                        </div>
+                      </div>
+                      {getPostCaption(post) && (
+                        <p style={{ margin: 0, fontSize: 14, lineHeight: 1.4, opacity: 0.95 }}>
+                          {getPostCaption(post)}
+                        </p>
+                      )}
                     </div>
-                  </div>
-                  {getPostCaption(post) && (
-                    <p style={{ margin: 0, fontSize: 14, lineHeight: 1.4 }}>
-                      {getPostCaption(post)}
-                    </p>
-                  )}
+                  </Link>
                 </div>
+              </div>
+            );
+          })}
 
-                <div
-                  style={{
-                    position: "absolute",
-                    right: 12,
-                    top: "50%",
-                    transform: "translateY(-50%)",
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: 20,
-                    zIndex: 10,
-                  }}
-                >
-                  <button
-                    onClick={(e) => handleLike(e, post.id, getPostLikeCount(post))}
-                    style={{
-                      background: "rgba(0,0,0,0.5)",
-                      border: "none",
-                      borderRadius: "50%",
-                      width: 56,
-                      height: 56,
-                      display: "flex",
-                      flexDirection: "column",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      color: isLiked ? "var(--accent-gold)" : "white",
-                      cursor: "pointer",
-                      fontSize: 24,
-                      backdropFilter: "blur(10px)",
-                      transition: "transform 0.2s",
-                    }}
-                    onMouseDown={(e) => {
-                      e.currentTarget.style.transform = "scale(0.9)";
-                    }}
-                    onMouseUp={(e) => {
-                      e.currentTarget.style.transform = "scale(1)";
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.transform = "scale(1)";
-                    }}
-                  >
-                    <span>{isLiked ? "❤️" : "🤍"}</span>
-                    <span style={{ fontSize: 12, marginTop: 2 }}>
-                      {getPostLikeCount(post)}
-                    </span>
-                  </button>
-
-                  <button
-                    onClick={(e) => handleOpenComments(e, post.id)}
-                    style={{
-                      background: "rgba(0,0,0,0.5)",
-                      border: "none",
-                      borderRadius: "50%",
-                      width: 56,
-                      height: 56,
-                      display: "flex",
-                      flexDirection: "column",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      color: "white",
-                      cursor: "pointer",
-                      fontSize: 24,
-                      backdropFilter: "blur(10px)",
-                    }}
-                  >
-                    <span>💬</span>
-                    <span style={{ fontSize: 12, marginTop: 2 }}>
-                      {getPostCommentCount(post)}
-                    </span>
-                  </button>
-
-                  <button
-                    onClick={(e) => e.preventDefault()}
-                    style={{
-                      background: "rgba(0,0,0,0.5)",
-                      border: "none",
-                      borderRadius: "50%",
-                      width: 56,
-                      height: 56,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      color: "white",
-                      cursor: "pointer",
-                      fontSize: 24,
-                      backdropFilter: "blur(10px)",
-                    }}
-                  >
-                    ⋯
-                  </button>
-                </div>
-              </Link>
+          {loadingMore && (
+            <div
+              style={{
+                padding: 40,
+                textAlign: "center",
+                color: "rgba(255,255,255,0.6)",
+              }}
+            >
+              Loading more...
             </div>
-          );
-        })}
-
-        {loadingMore && (
-          <div
-            style={{
-              scrollSnapAlign: "start",
-              minHeight: "100dvh",
-              display: "grid",
-              placeItems: "center",
-              color: "white",
-            }}
-          >
-            <p>Loading more...</p>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {commentDrawerPostId && (
@@ -917,6 +1035,51 @@ export default function FeedPage() {
           onClose={() => setCommentDrawerPostId(null)}
         />
       )}
+
+      <style jsx global>{`
+        @keyframes inFade {
+          0% {
+            opacity: 0;
+            transform: translateY(20px) scale(0.98);
+          }
+          100% {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+          }
+        }
+
+        @keyframes pop {
+          0% {
+            transform: scale(1);
+          }
+          50% {
+            transform: scale(1.18);
+          }
+          100% {
+            transform: scale(1);
+          }
+        }
+
+        .postFrame {
+          opacity: 0;
+          transform: translateY(20px) scale(0.98);
+          transition: all 0.3s ease;
+        }
+
+        .postFrame.inview {
+          animation: inFade 0.5s ease forwards;
+        }
+
+        .actionBtn:hover {
+          transform: scale(1.08);
+          box-shadow: 0 0 20px rgba(212, 175, 55, 0.4);
+          border-color: rgba(212, 175, 55, 0.5);
+        }
+
+        .likeIcon {
+          animation: pop 0.4s ease;
+        }
+      `}</style>
     </>
   );
 }
