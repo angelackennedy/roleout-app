@@ -2,10 +2,17 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase";
+import { MODE } from "@/lib/config";
+import { initLocalDB, savePost } from "@/lib/localdb";
 import { useAuth } from "@/lib/auth-context";
 import { FFmpeg } from "@ffmpeg/ffmpeg";
 import { fetchFile } from "@ffmpeg/util";
+
+let supabase: any = null;
+if (MODE === "supabase") {
+  const supabaseModule = require("@/lib/supabase");
+  supabase = supabaseModule.supabase;
+}
 
 function canBrowserPlay(file: File): boolean {
   if (!file.type.startsWith("video/")) return true;
@@ -78,7 +85,7 @@ export default function UploadPage() {
   const router = useRouter();
 
   useEffect(() => {
-    if (!user) {
+    if (MODE === "supabase" && !user) {
       router.push("/auth/login");
     }
   }, [user, router]);
@@ -213,7 +220,7 @@ export default function UploadPage() {
   };
 
   const handleUpload = async () => {
-    if (!user) {
+    if (MODE === "supabase" && !user) {
       setError("You must be signed in to upload.");
       return;
     }
@@ -228,41 +235,57 @@ export default function UploadPage() {
     setUploadSuccess(false);
 
     try {
-      const fileExt = safeFile.name.split(".").pop();
-      const isImage = safeFile.type.startsWith("image/");
-      
-      const folder = isImage ? "images" : "videos";
-      const fileName = `${folder}/${user.id}/${Date.now()}.${fileExt}`;
+      if (MODE === "local") {
+        await initLocalDB();
+        
+        setProgress(50);
+        await savePost(safeFile, caption);
+        
+        setProgress(100);
+        setUploadSuccess(true);
 
-      await uploadWithProgress(fileName, safeFile);
+        setTimeout(() => {
+          resetForm();
+          setUploadSuccess(false);
+          router.push("/feed");
+        }, 1500);
+      } else if (MODE === "supabase") {
+        const fileExt = safeFile.name.split(".").pop();
+        const isImage = safeFile.type.startsWith("image/");
+        
+        const folder = isImage ? "images" : "videos";
+        const fileName = `${folder}/${user!.id}/${Date.now()}.${fileExt}`;
 
-      const { data } = supabase.storage.from("media").getPublicUrl(fileName);
-      const publicUrl = data.publicUrl;
+        await uploadWithProgress(fileName, safeFile);
 
-      const { error: dbError } = await supabase.from("posts").insert({
-        user_id: user.id,
-        video_url: publicUrl,
-        caption: caption,
-        like_count: 0,
-        comment_count: 0,
-      });
+        const { data } = supabase.storage.from("media").getPublicUrl(fileName);
+        const publicUrl = data.publicUrl;
 
-      if (dbError) {
-        console.error("Database insert error:", dbError);
-        setError(dbError.message);
-        setProgress(0);
-        setUploadSuccess(false);
-        return;
+        const { error: dbError } = await supabase.from("posts").insert({
+          user_id: user!.id,
+          video_url: publicUrl,
+          caption: caption,
+          like_count: 0,
+          comment_count: 0,
+        });
+
+        if (dbError) {
+          console.error("Database insert error:", dbError);
+          setError(dbError.message);
+          setProgress(0);
+          setUploadSuccess(false);
+          return;
+        }
+
+        setUploadSuccess(true);
+        setProgress(100);
+
+        setTimeout(() => {
+          resetForm();
+          setUploadSuccess(false);
+          router.push("/feed");
+        }, 1500);
       }
-
-      setUploadSuccess(true);
-      setProgress(100);
-
-      setTimeout(() => {
-        resetForm();
-        setUploadSuccess(false);
-        router.push("/feed");
-      }, 1500);
     } catch (e: any) {
       console.error("Upload error:", e);
       setError(e.message || "Upload failed");
@@ -274,6 +297,11 @@ export default function UploadPage() {
   };
 
   const testStorageAccess = async () => {
+    if (MODE === "local") {
+      setTestResult("✅ Local mode: Using IndexedDB storage");
+      return;
+    }
+
     setTesting(true);
     setTestResult("");
     try {
@@ -294,7 +322,7 @@ export default function UploadPage() {
     }
   };
 
-  if (!user) return null;
+  if (MODE === "supabase" && !user) return null;
 
   const isVideo = safeFile?.type.startsWith("video/");
   const isImage = safeFile?.type.startsWith("image/");
@@ -304,6 +332,11 @@ export default function UploadPage() {
       <section className="hero" style={{ paddingBottom: 20 }}>
         <h1>Upload</h1>
         <p>Share a video or image (max 60s for video)</p>
+        {MODE === "local" && (
+          <p style={{ fontSize: 14, color: "var(--accent-gold)", marginTop: 8 }}>
+            📦 Local Mode: Data stored in browser (IndexedDB)
+          </p>
+        )}
       </section>
 
       <div className="card" style={{ maxWidth: 600, margin: "0 auto" }}>
@@ -519,7 +552,7 @@ export default function UploadPage() {
                 backgroundColor: "rgba(197,164,109,0.15)",
                 border: "1px solid rgba(197,164,109,0.3)",
               }}
-              title="Test access to 'media' storage bucket"
+              title={MODE === "local" ? "Local IndexedDB storage" : "Test access to 'media' storage bucket"}
             >
               {testing ? "Testing..." : "🔍 Test Storage"}
             </button>
