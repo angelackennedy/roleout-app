@@ -17,7 +17,8 @@ CREATE TABLE profiles (
 CREATE TABLE posts (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID REFERENCES profiles(id) ON DELETE CASCADE NOT NULL,
-  video_url TEXT NOT NULL,
+  video_url TEXT,
+  image_url TEXT,
   caption TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   like_count INTEGER DEFAULT 0,

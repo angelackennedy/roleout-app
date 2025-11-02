@@ -233,23 +233,24 @@ export default function UploadPage() {
       const publicUrl = data.publicUrl;
 
       if (!publicUrl) {
-        throw new Error("Failed to get public URL");
+        throw new Error("Failed to get public URL from storage");
       }
 
-      const { error: dbError } = await supabase.from("posts").insert({
+      const { data: insertData, error: dbError } = await supabase.from("posts").insert({
         user_id: user.id,
         video_url: isVideo ? publicUrl : null,
         image_url: isImage ? publicUrl : null,
         caption: caption.trim() || null,
         like_count: 0,
         comment_count: 0,
-      });
+      }).select();
 
       if (dbError) {
-        console.error("Database insert error:", dbError);
-        throw dbError;
+        console.error("Database insert error (full object):", dbError);
+        throw new Error(dbError.message || dbError.hint || "Database insert failed");
       }
 
+      console.log("Post saved successfully:", insertData);
       setUploadSuccess(true);
       setProgress(100);
 
@@ -414,11 +415,11 @@ export default function UploadPage() {
                   justifyContent: "space-between",
                   marginBottom: 8,
                   fontSize: 14,
-                  color: "rgba(255,255,255,0.7)",
+                  color: uploadSuccess ? "var(--accent-gold)" : "rgba(255,255,255,0.7)",
                 }}
               >
                 <span>
-                  {uploadSuccess ? "✅ Uploaded successfully!" : "Uploading..."}
+                  {uploadSuccess ? "✅ Post saved successfully" : "Uploading..."}
                 </span>
                 <span>{progress}%</span>
               </div>

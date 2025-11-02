@@ -46,7 +46,8 @@ export type Database = {
         Row: {
           id: string;
           user_id: string;
-          video_url: string;
+          video_url: string | null;
+          image_url: string | null;
           caption: string | null;
           created_at: string;
           like_count: number;
@@ -55,7 +56,8 @@ export type Database = {
         Insert: {
           id?: string;
           user_id: string;
-          video_url: string;
+          video_url?: string | null;
+          image_url?: string | null;
           caption?: string | null;
           created_at?: string;
           like_count?: number;
@@ -64,7 +66,8 @@ export type Database = {
         Update: {
           id?: string;
           user_id?: string;
-          video_url?: string;
+          video_url?: string | null;
+          image_url?: string | null;
           caption?: string | null;
           created_at?: string;
           like_count?: number;
