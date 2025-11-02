@@ -3,8 +3,14 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase';
+import { MODE } from '@/lib/config';
 import { useAuth } from '@/lib/auth-context';
+
+let supabase: any = null;
+if (MODE === "supabase") {
+  const supabaseModule = require('@/lib/supabase');
+  supabase = supabaseModule.supabase;
+}
 
 interface Profile {
   id: string;
@@ -33,11 +39,17 @@ export default function UserProfilePage() {
   const isOwnProfile = user?.id === userId;
 
   useEffect(() => {
-    fetchProfile();
-    fetchUserPosts();
+    if (MODE === "supabase") {
+      fetchProfile();
+      fetchUserPosts();
+    } else {
+      setLoading(false);
+    }
   }, [userId]);
 
   const fetchProfile = async () => {
+    if (MODE !== "supabase") return;
+
     try {
       const { data, error } = await supabase
         .from('profiles')
@@ -55,6 +67,8 @@ export default function UserProfilePage() {
   };
 
   const fetchUserPosts = async () => {
+    if (MODE !== "supabase") return;
+
     try {
       const { data, error } = await supabase
         .from('posts')

@@ -2,7 +2,13 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase';
+import { MODE } from '@/lib/config';
+
+let supabase: any = null;
+if (MODE === "supabase") {
+  const supabaseModule = require('@/lib/supabase');
+  supabase = supabaseModule.supabase;
+}
 
 interface ModerationAction {
   id: string;
@@ -33,11 +39,17 @@ export default function ModerationPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchModerationLog();
-    fetchFlags();
+    if (MODE === "supabase") {
+      fetchModerationLog();
+      fetchFlags();
+    } else {
+      setLoading(false);
+    }
   }, []);
 
   const fetchModerationLog = async () => {
+    if (MODE !== "supabase") return;
+
     try {
       const { data, error } = await supabase
         .from('moderation_actions')
@@ -58,6 +70,8 @@ export default function ModerationPage() {
   };
 
   const fetchFlags = async () => {
+    if (MODE !== "supabase") return;
+
     try {
       const { data, error } = await supabase
         .from('flags')

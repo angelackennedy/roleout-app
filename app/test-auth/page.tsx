@@ -1,7 +1,13 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import { MODE } from '@/lib/config';
+
+let supabase: any = null;
+if (MODE === "supabase") {
+  const supabaseModule = require('@/lib/supabase');
+  supabase = supabaseModule.supabase;
+}
 
 export default function TestAuthPage() {
   const [healthStatus, setHealthStatus] = useState<any>(null);
@@ -9,20 +15,31 @@ export default function TestAuthPage() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    // Test health endpoint on load
-    fetch('/api/health')
-      .then(res => res.json())
-      .then(data => {
-        console.log('[Test Auth] Health check:', data);
-        setHealthStatus(data);
-      })
-      .catch(err => {
-        console.error('[Test Auth] Health check error:', err);
-        setHealthStatus({ error: err.message });
-      });
+    if (MODE === "supabase") {
+      // Test health endpoint on load
+      fetch('/api/health')
+        .then(res => res.json())
+        .then(data => {
+          console.log('[Test Auth] Health check:', data);
+          setHealthStatus(data);
+        })
+        .catch(err => {
+          console.error('[Test Auth] Health check error:', err);
+          setHealthStatus({ error: err.message });
+        });
+    }
   }, []);
 
   const testSignup = async () => {
+    if (MODE !== "supabase") {
+      setSignupResult({
+        success: false,
+        error: { message: "Auth testing only available in Supabase mode" },
+        timestamp: new Date().toISOString()
+      });
+      return;
+    }
+
     setLoading(true);
     const testEmail = `test-${Date.now()}@example.com`;
     const testPassword = 'TestPassword123!';
