@@ -2,10 +2,27 @@
 
 import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
-import { supabase } from "@/lib/supabase";
+import { MODE, PAGE_SIZE } from "@/lib/config";
+import { initLocalDB, listPosts, likePost, listComments, addComment, commentsChannel } from "@/lib/localdb";
 import { useAuth } from "@/lib/auth-context";
 
-interface Post {
+let supabase: any = null;
+if (MODE === "supabase") {
+  const supabaseModule = require("@/lib/supabase");
+  supabase = supabaseModule.supabase;
+}
+
+interface LocalPost {
+  id: string;
+  kind: "image" | "video";
+  caption?: string;
+  created_at: string;
+  likes: number;
+  comments_count: number;
+  objectUrl: string;
+}
+
+interface SupabasePost {
   id: string;
   video_url: string | null;
   image_url: string | null;
@@ -19,18 +36,19 @@ interface Post {
   };
 }
 
+type Post = LocalPost | SupabasePost;
+
 interface Comment {
   id: string;
   body: string;
   created_at: string;
-  user_id: string;
-  profiles: {
+  user?: string;
+  user_id?: string;
+  profiles?: {
     username: string;
     avatar_url: string | null;
   };
 }
-
-const POSTS_PER_PAGE = 10;
 
 function CommentDrawer({
   postId,
@@ -50,46 +68,65 @@ function CommentDrawer({
   }, [postId]);
 
   useEffect(() => {
-    const channel = supabase
-      .channel(`comments:${postId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "comments",
-          filter: `post_id=eq.${postId}`,
-        },
-        async (payload) => {
-          const { data: newCommentData } = await supabase
-            .from("comments")
-            .select("*, profiles(username, avatar_url)")
-            .eq("id", payload.new.id)
-            .single();
-
-          if (newCommentData) {
-            setComments((prev) => [...prev, newCommentData]);
-          }
+    if (MODE === "local") {
+      const handleMessage = (event: MessageEvent) => {
+        if (event.data.type === "comment" && event.data.postId === postId) {
+          setComments((prev) => [...prev, event.data.comment]);
         }
-      )
-      .subscribe();
+      };
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
+      commentsChannel.addEventListener("message", handleMessage);
+      return () => {
+        commentsChannel.removeEventListener("message", handleMessage);
+      };
+    } else if (MODE === "supabase") {
+      const channel = supabase
+        .channel(`comments:${postId}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "comments",
+            filter: `post_id=eq.${postId}`,
+          },
+          async (payload: any) => {
+            const { data: newCommentData } = await supabase
+              .from("comments")
+              .select("*, profiles(username, avatar_url)")
+              .eq("id", payload.new.id)
+              .single();
+
+            if (newCommentData) {
+              setComments((prev) => [...prev, newCommentData]);
+            }
+          }
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    }
   }, [postId]);
 
   const fetchComments = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from("comments")
-        .select("*, profiles(username, avatar_url)")
-        .eq("post_id", postId)
-        .order("created_at", { ascending: true });
+      
+      if (MODE === "local") {
+        const data = await listComments(postId);
+        setComments(data);
+      } else if (MODE === "supabase") {
+        const { data, error } = await supabase
+          .from("comments")
+          .select("*, profiles(username, avatar_url)")
+          .eq("post_id", postId)
+          .order("created_at", { ascending: true });
 
-      if (error) throw error;
-      setComments(data || []);
+        if (error) throw error;
+        setComments(data || []);
+      }
     } catch (error) {
       console.error("Error fetching comments:", error);
     } finally {
@@ -99,32 +136,46 @@ function CommentDrawer({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user || !newComment.trim() || submitting) return;
+    if (!newComment.trim() || submitting) return;
 
     setSubmitting(true);
     const body = newComment.trim();
 
     try {
-      const { error } = await supabase.from("comments").insert({
-        user_id: user.id,
-        post_id: postId,
-        body,
-      });
+      if (MODE === "local") {
+        await addComment(postId, body, "LocalUser");
+        setNewComment("");
+      } else if (MODE === "supabase") {
+        if (!user) return;
 
-      if (error) throw error;
+        const { error } = await supabase.from("comments").insert({
+          user_id: user.id,
+          post_id: postId,
+          body,
+        });
 
-      await supabase
-        .from("posts")
-        .update({ comment_count: comments.length + 1 })
-        .eq("id", postId);
+        if (error) throw error;
 
-      setNewComment("");
+        await supabase
+          .from("posts")
+          .update({ comment_count: comments.length + 1 })
+          .eq("id", postId);
+
+        setNewComment("");
+      }
     } catch (error) {
       console.error("Error posting comment:", error);
       alert("Failed to post comment. Please try again.");
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const getCommentUsername = (comment: Comment) => {
+    if (MODE === "local") {
+      return comment.user || "LocalUser";
+    }
+    return comment.profiles?.username || "User";
   };
 
   return (
@@ -222,7 +273,7 @@ function CommentDrawer({
                     className="avatar"
                     style={{ width: 24, height: 24, fontSize: 12 }}
                   >
-                    {(comment.profiles?.username?.[0] || "U").toUpperCase()}
+                    {getCommentUsername(comment)[0].toUpperCase()}
                   </div>
                   <div
                     style={{
@@ -231,7 +282,7 @@ function CommentDrawer({
                       color: "white",
                     }}
                   >
-                    {comment.profiles?.username || "User"}
+                    {getCommentUsername(comment)}
                   </div>
                 </div>
                 <p
@@ -257,7 +308,7 @@ function CommentDrawer({
           )}
         </div>
 
-        {user ? (
+        {(MODE === "local" || user) ? (
           <form
             onSubmit={handleSubmit}
             style={{
@@ -333,7 +384,7 @@ export default function FeedPage() {
 
   useEffect(() => {
     fetchPosts();
-    if (user) fetchUserLikes();
+    if (MODE === "supabase" && user) fetchUserLikes();
   }, [user]);
 
   useEffect(() => {
@@ -371,7 +422,7 @@ export default function FeedPage() {
   }, [commentDrawerPostId]);
 
   const fetchUserLikes = async () => {
-    if (!user) return;
+    if (MODE !== "supabase" || !user) return;
 
     try {
       const { data } = await supabase
@@ -380,7 +431,7 @@ export default function FeedPage() {
         .eq("user_id", user.id);
 
       if (data) {
-        setLikedPosts(new Set(data.map((like) => like.post_id)));
+        setLikedPosts(new Set(data.map((like: any) => like.post_id)));
       }
     } catch (error) {
       console.error("Error fetching likes:", error);
@@ -397,28 +448,43 @@ export default function FeedPage() {
 
       const currentOffset = loadMore ? offset : 0;
 
-      const { data, error } = await supabase
-        .from("posts")
-        .select(
+      if (MODE === "local") {
+        await initLocalDB();
+        const data = await listPosts(currentOffset, PAGE_SIZE);
+
+        if (loadMore) {
+          setPosts((prev) => [...prev, ...data]);
+          setOffset(currentOffset + PAGE_SIZE);
+        } else {
+          setPosts(data);
+          setOffset(PAGE_SIZE);
+        }
+
+        setHasMore(data.length === PAGE_SIZE);
+      } else if (MODE === "supabase") {
+        const { data, error } = await supabase
+          .from("posts")
+          .select(
+            `
+            *,
+            profiles (username, avatar_url)
           `
-          *,
-          profiles (username, avatar_url)
-        `
-        )
-        .order("created_at", { ascending: false })
-        .range(currentOffset, currentOffset + POSTS_PER_PAGE - 1);
+          )
+          .order("created_at", { ascending: false })
+          .range(currentOffset, currentOffset + PAGE_SIZE - 1);
 
-      if (error) throw error;
+        if (error) throw error;
 
-      if (loadMore) {
-        setPosts((prev) => [...prev, ...(data || [])]);
-        setOffset(currentOffset + POSTS_PER_PAGE);
-      } else {
-        setPosts(data || []);
-        setOffset(POSTS_PER_PAGE);
+        if (loadMore) {
+          setPosts((prev) => [...prev, ...(data || [])]);
+          setOffset(currentOffset + PAGE_SIZE);
+        } else {
+          setPosts(data || []);
+          setOffset(PAGE_SIZE);
+        }
+
+        setHasMore((data || []).length === PAGE_SIZE);
       }
-
-      setHasMore((data || []).length === POSTS_PER_PAGE);
     } catch (error) {
       console.error("Error fetching posts:", error);
     } finally {
@@ -435,68 +501,109 @@ export default function FeedPage() {
     e.preventDefault();
     e.stopPropagation();
 
-    if (!user) return;
+    if (MODE === "local") {
+      setPosts((prev) =>
+        prev.map((p) => {
+          if (p.id === postId) {
+            const isLocal = "kind" in p;
+            if (isLocal) {
+              return { ...p, likes: p.likes + 1 };
+            }
+          }
+          return p;
+        })
+      );
 
-    const isLiked = likedPosts.has(postId);
-    const newCount = isLiked ? currentCount - 1 : currentCount + 1;
-
-    setLikedPosts((prev) => {
-      const next = new Set(prev);
-      if (isLiked) {
-        next.delete(postId);
-      } else {
-        next.add(postId);
+      try {
+        await likePost(postId);
+      } catch (error) {
+        console.error("Like failed:", error);
+        setPosts((prev) =>
+          prev.map((p) => {
+            if (p.id === postId) {
+              const isLocal = "kind" in p;
+              if (isLocal) {
+                return { ...p, likes: Math.max(0, p.likes - 1) };
+              }
+            }
+            return p;
+          })
+        );
       }
-      return next;
-    });
+    } else if (MODE === "supabase") {
+      if (!user) return;
 
-    setPosts((prev) =>
-      prev.map((p) => (p.id === postId ? { ...p, like_count: newCount } : p))
-    );
-
-    try {
-      let likeError;
-
-      if (isLiked) {
-        const { error } = await supabase
-          .from("likes")
-          .delete()
-          .eq("user_id", user.id)
-          .eq("post_id", postId);
-        likeError = error;
-      } else {
-        const { error } = await supabase
-          .from("likes")
-          .insert({ user_id: user.id, post_id: postId });
-        likeError = error;
-      }
-
-      if (likeError) throw likeError;
-
-      const { error: updateError } = await supabase
-        .from("posts")
-        .update({ like_count: newCount })
-        .eq("id", postId);
-
-      if (updateError) throw updateError;
-    } catch (error) {
-      console.error("Like failed:", error);
+      const isLiked = likedPosts.has(postId);
+      const newCount = isLiked ? currentCount - 1 : currentCount + 1;
 
       setLikedPosts((prev) => {
         const next = new Set(prev);
         if (isLiked) {
-          next.add(postId);
-        } else {
           next.delete(postId);
+        } else {
+          next.add(postId);
         }
         return next;
       });
 
       setPosts((prev) =>
-        prev.map((p) =>
-          p.id === postId ? { ...p, like_count: currentCount } : p
-        )
+        prev.map((p) => {
+          const isSupabase = "like_count" in p;
+          if (p.id === postId && isSupabase) {
+            return { ...p, like_count: newCount };
+          }
+          return p;
+        })
       );
+
+      try {
+        let likeError;
+
+        if (isLiked) {
+          const { error } = await supabase
+            .from("likes")
+            .delete()
+            .eq("user_id", user.id)
+            .eq("post_id", postId);
+          likeError = error;
+        } else {
+          const { error } = await supabase
+            .from("likes")
+            .insert({ user_id: user.id, post_id: postId });
+          likeError = error;
+        }
+
+        if (likeError) throw likeError;
+
+        const { error: updateError } = await supabase
+          .from("posts")
+          .update({ like_count: newCount })
+          .eq("id", postId);
+
+        if (updateError) throw updateError;
+      } catch (error) {
+        console.error("Like failed:", error);
+
+        setLikedPosts((prev) => {
+          const next = new Set(prev);
+          if (isLiked) {
+            next.add(postId);
+          } else {
+            next.delete(postId);
+          }
+          return next;
+        });
+
+        setPosts((prev) =>
+          prev.map((p) => {
+            const isSupabase = "like_count" in p;
+            if (p.id === postId && isSupabase) {
+              return { ...p, like_count: currentCount };
+            }
+            return p;
+          })
+        );
+      }
     }
   };
 
@@ -504,6 +611,48 @@ export default function FeedPage() {
     e.preventDefault();
     e.stopPropagation();
     setCommentDrawerPostId(postId);
+  };
+
+  const getPostMediaUrl = (post: Post) => {
+    if ("kind" in post) {
+      return post.objectUrl;
+    }
+    return post.video_url || post.image_url || "";
+  };
+
+  const isVideo = (post: Post) => {
+    if ("kind" in post) {
+      return post.kind === "video";
+    }
+    return !!post.video_url;
+  };
+
+  const getPostCaption = (post: Post) => {
+    if ("kind" in post) {
+      return post.caption || "";
+    }
+    return post.caption || "";
+  };
+
+  const getPostLikeCount = (post: Post) => {
+    if ("kind" in post) {
+      return post.likes;
+    }
+    return post.like_count;
+  };
+
+  const getPostCommentCount = (post: Post) => {
+    if ("kind" in post) {
+      return post.comments_count;
+    }
+    return post.comment_count;
+  };
+
+  const getUsername = (post: Post) => {
+    if ("kind" in post) {
+      return "LocalUser";
+    }
+    return post.profiles?.username || "User";
   };
 
   if (loading) {
@@ -558,6 +707,8 @@ export default function FeedPage() {
         {posts.map((post, index) => {
           const isLiked = likedPosts.has(post.id);
           const isLastPost = index === posts.length - 1;
+          const mediaUrl = getPostMediaUrl(post);
+          const postIsVideo = isVideo(post);
 
           return (
             <div
@@ -573,7 +724,8 @@ export default function FeedPage() {
               }}
             >
               <Link
-                href={`/post/${post.id}`}
+                href={MODE === "local" ? "#" : `/post/${post.id}`}
+                onClick={(e) => MODE === "local" && e.preventDefault()}
                 style={{
                   display: "grid",
                   placeItems: "center",
@@ -584,9 +736,9 @@ export default function FeedPage() {
                   position: "relative",
                 }}
               >
-                {post.video_url && (
+                {postIsVideo ? (
                   <video
-                    src={post.video_url}
+                    src={mediaUrl}
                     controls
                     playsInline
                     muted
@@ -599,12 +751,10 @@ export default function FeedPage() {
                       objectFit: "contain",
                     }}
                   />
-                )}
-
-                {post.image_url && (
+                ) : (
                   <img
-                    src={post.image_url}
-                    alt={post.caption || "Post"}
+                    src={mediaUrl}
+                    alt={getPostCaption(post)}
                     style={{
                       maxWidth: "100%",
                       maxHeight: "100dvh",
@@ -638,15 +788,15 @@ export default function FeedPage() {
                       className="avatar"
                       style={{ width: 32, height: 32, fontSize: 14 }}
                     >
-                      {(post.profiles?.username?.[0] || "U").toUpperCase()}
+                      {getUsername(post)[0].toUpperCase()}
                     </div>
                     <div style={{ fontWeight: 600, fontSize: 15 }}>
-                      {post.profiles?.username || "User"}
+                      {getUsername(post)}
                     </div>
                   </div>
-                  {post.caption && (
+                  {getPostCaption(post) && (
                     <p style={{ margin: 0, fontSize: 14, lineHeight: 1.4 }}>
-                      {post.caption}
+                      {getPostCaption(post)}
                     </p>
                   )}
                 </div>
@@ -664,7 +814,7 @@ export default function FeedPage() {
                   }}
                 >
                   <button
-                    onClick={(e) => handleLike(e, post.id, post.like_count)}
+                    onClick={(e) => handleLike(e, post.id, getPostLikeCount(post))}
                     style={{
                       background: "rgba(0,0,0,0.5)",
                       border: "none",
@@ -693,7 +843,7 @@ export default function FeedPage() {
                   >
                     <span>{isLiked ? "❤️" : "🤍"}</span>
                     <span style={{ fontSize: 12, marginTop: 2 }}>
-                      {post.like_count}
+                      {getPostLikeCount(post)}
                     </span>
                   </button>
 
@@ -717,7 +867,7 @@ export default function FeedPage() {
                   >
                     <span>💬</span>
                     <span style={{ fontSize: 12, marginTop: 2 }}>
-                      {post.comment_count}
+                      {getPostCommentCount(post)}
                     </span>
                   </button>
 
