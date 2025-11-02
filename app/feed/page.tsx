@@ -379,6 +379,8 @@ export default function FeedPage() {
     null
   );
   const [likeAnimations, setLikeAnimations] = useState<Set<string>>(new Set());
+  const [activePostId, setActivePostId] = useState<string | null>(null);
+  const [showSwipeHints, setShowSwipeHints] = useState(false);
   const { user } = useAuth();
   const lastPostRef = useRef<HTMLDivElement>(null);
   const paginationObserverRef = useRef<IntersectionObserver | null>(null);
@@ -389,6 +391,13 @@ export default function FeedPage() {
   useEffect(() => {
     fetchPosts();
     if (MODE === "supabase" && user) fetchUserLikes();
+
+    if (typeof window !== "undefined") {
+      const hasSeenSwipe = sessionStorage.getItem("roleout_seen_swipe");
+      if (!hasSeenSwipe) {
+        setShowSwipeHints(true);
+      }
+    }
   }, [user]);
 
   useEffect(() => {
@@ -426,6 +435,7 @@ export default function FeedPage() {
 
           if (entry.isIntersecting) {
             postElement.classList.add("inview");
+            setActivePostId(postId);
             if (videoElement) {
               videoElement.play().catch(() => {});
             }
@@ -463,6 +473,13 @@ export default function FeedPage() {
     window.addEventListener("keydown", handleEscape);
     return () => window.removeEventListener("keydown", handleEscape);
   }, [commentDrawerPostId]);
+
+  const hideSwipeHints = () => {
+    setShowSwipeHints(false);
+    if (typeof window !== "undefined") {
+      sessionStorage.setItem("roleout_seen_swipe", "true");
+    }
+  };
 
   const fetchUserLikes = async () => {
     if (MODE !== "supabase" || !user) return;
@@ -792,10 +809,13 @@ export default function FeedPage() {
             scrollSnapType: "y mandatory",
             zIndex: 2,
           }}
+          onScroll={hideSwipeHints}
+          onClick={hideSwipeHints}
         >
           {posts.map((post, index) => {
             const isLiked = likedPosts.has(post.id);
             const isLastPost = index === posts.length - 1;
+            const isFirstPost = index === 0;
             const mediaUrl = getPostMediaUrl(post);
             const postIsVideo = isVideo(post);
             const hasLikeAnimation = likeAnimations.has(post.id);
@@ -839,6 +859,49 @@ export default function FeedPage() {
                     `,
                   }}
                 >
+                  <div
+                    className="watermark"
+                    style={{
+                      position: "absolute",
+                      inset: 0,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      pointerEvents: "none",
+                      zIndex: 1,
+                      opacity: 0,
+                      transition: "opacity 0.5s ease",
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: "clamp(60px, 15vw, 120px)",
+                        fontWeight: 900,
+                        letterSpacing: "0.1em",
+                        background: "linear-gradient(135deg, rgba(255,255,255,0.09) 0%, rgba(212,175,55,0.08) 100%)",
+                        WebkitBackgroundClip: "text",
+                        WebkitTextFillColor: "transparent",
+                        backgroundClip: "text",
+                        filter: "blur(0.1px)",
+                        userSelect: "none",
+                      }}
+                    >
+                      ROLE{" "}
+                      <span
+                        style={{
+                          display: "inline-block",
+                          width: "0.6em",
+                          height: "0.6em",
+                          borderRadius: "50%",
+                          background: "linear-gradient(135deg, rgba(255,255,255,0.09) 0%, rgba(212,175,55,0.08) 100%)",
+                          verticalAlign: "middle",
+                          marginBottom: "0.1em",
+                        }}
+                      />
+                      UT
+                    </div>
+                  </div>
+
                   <Link
                     href={MODE === "local" ? "#" : `/post/${post.id}`}
                     onClick={(e) => MODE === "local" && e.preventDefault()}
@@ -851,6 +914,7 @@ export default function FeedPage() {
                       textDecoration: "none",
                       color: "inherit",
                       position: "relative",
+                      zIndex: 2,
                     }}
                   >
                     {postIsVideo ? (
@@ -1011,6 +1075,41 @@ export default function FeedPage() {
                     </div>
                   </Link>
                 </div>
+
+                {isFirstPost && showSwipeHints && (
+                  <div
+                    className="swipeHints"
+                    style={{
+                      position: "absolute",
+                      bottom: 100,
+                      left: "50%",
+                      transform: "translateX(-50%)",
+                      display: "flex",
+                      gap: 40,
+                      alignItems: "center",
+                      zIndex: 20,
+                      pointerEvents: "none",
+                    }}
+                  >
+                    <div style={{ fontSize: 32, color: "rgba(255,255,255,0.4)" }}>
+                      ‹
+                    </div>
+                    <div
+                      style={{
+                        fontSize: 12,
+                        color: "rgba(255,255,255,0.5)",
+                        fontWeight: 600,
+                        textTransform: "uppercase",
+                        letterSpacing: "0.1em",
+                      }}
+                    >
+                      Swipe
+                    </div>
+                    <div style={{ fontSize: 32, color: "rgba(255,255,255,0.4)" }}>
+                      ›
+                    </div>
+                  </div>
+                )}
               </div>
             );
           })}
@@ -1027,6 +1126,24 @@ export default function FeedPage() {
             </div>
           )}
         </div>
+
+        {activePostId && (
+          <div
+            className="nowPlayingBar"
+            style={{
+              position: "fixed",
+              bottom: 0,
+              left: "50%",
+              transform: "translateX(-50%)",
+              width: "70%",
+              height: 2,
+              background: "linear-gradient(90deg, transparent 0%, rgba(212,175,55,0.8) 50%, transparent 100%)",
+              boxShadow: "0 0 10px rgba(212,175,55,0.6)",
+              zIndex: 100,
+              pointerEvents: "none",
+            }}
+          />
+        )}
       </div>
 
       {commentDrawerPostId && (
@@ -1060,6 +1177,26 @@ export default function FeedPage() {
           }
         }
 
+        @keyframes swipePulse {
+          0%, 100% {
+            opacity: 0.4;
+            transform: scale(1);
+          }
+          50% {
+            opacity: 0.7;
+            transform: scale(1.1);
+          }
+        }
+
+        @keyframes barFadeIn {
+          from {
+            opacity: 0;
+          }
+          to {
+            opacity: 1;
+          }
+        }
+
         .postFrame {
           opacity: 0;
           transform: translateY(20px) scale(0.98);
@@ -1070,6 +1207,10 @@ export default function FeedPage() {
           animation: inFade 0.5s ease forwards;
         }
 
+        .postFrame.inview .watermark {
+          opacity: 1 !important;
+        }
+
         .actionBtn:hover {
           transform: scale(1.08);
           box-shadow: 0 0 20px rgba(212, 175, 55, 0.4);
@@ -1078,6 +1219,14 @@ export default function FeedPage() {
 
         .likeIcon {
           animation: pop 0.4s ease;
+        }
+
+        .swipeHints {
+          animation: swipePulse 2s ease-in-out infinite;
+        }
+
+        .nowPlayingBar {
+          animation: barFadeIn 0.3s ease;
         }
       `}</style>
     </>
