@@ -3,10 +3,27 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { supabase } from "@/lib/supabase";
+import { MODE } from "@/lib/config";
+import { initLocalDB, getPost, listComments, addComment, commentsChannel, likePost } from "@/lib/localdb";
 import { useAuth } from "@/lib/auth-context";
 
-interface Post {
+let supabase: any = null;
+if (MODE === "supabase") {
+  const supabaseModule = require("@/lib/supabase");
+  supabase = supabaseModule.supabase;
+}
+
+interface LocalPost {
+  id: string;
+  kind: "image" | "video";
+  caption?: string;
+  created_at: string;
+  likes: number;
+  comments_count: number;
+  objectUrl: string;
+}
+
+interface SupabasePost {
   id: string;
   video_url: string | null;
   image_url: string | null;
@@ -21,7 +38,16 @@ interface Post {
   };
 }
 
-interface Comment {
+type Post = LocalPost | SupabasePost;
+
+interface LocalComment {
+  id: string;
+  body: string;
+  user: string;
+  created_at: string;
+}
+
+interface SupabaseComment {
   id: string;
   body: string;
   created_at: string;
@@ -31,6 +57,8 @@ interface Comment {
     avatar_url: string | null;
   };
 }
+
+type Comment = LocalComment | SupabaseComment;
 
 export default function PostPage() {
   const params = useParams();
@@ -47,57 +75,85 @@ export default function PostPage() {
   useEffect(() => {
     fetchPost();
     fetchComments();
-    if (user) checkLiked();
+    if (MODE === "supabase" && user) checkLiked();
   }, [postId, user]);
 
   useEffect(() => {
-    const channel = supabase
-      .channel(`comments:${postId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "comments",
-          filter: `post_id=eq.${postId}`,
-        },
-        async (payload) => {
-          const { data: newCommentData } = await supabase
-            .from("comments")
-            .select("*, profiles(username, avatar_url)")
-            .eq("id", payload.new.id)
-            .single();
-
-          if (newCommentData) {
-            setComments((prev) => [...prev, newCommentData]);
-            setPost((prev) =>
-              prev ? { ...prev, comment_count: prev.comment_count + 1 } : null
-            );
-          }
+    if (MODE === "local") {
+      const handleMessage = (event: MessageEvent) => {
+        if (event.data.type === "comment" && event.data.postId === postId) {
+          setComments((prev) => [...prev, event.data.comment]);
+          setPost((prev) => {
+            if (prev && "kind" in prev) {
+              return { ...prev, comments_count: prev.comments_count + 1 };
+            }
+            return prev;
+          });
         }
-      )
-      .subscribe();
+      };
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
+      commentsChannel.addEventListener("message", handleMessage);
+      return () => {
+        commentsChannel.removeEventListener("message", handleMessage);
+      };
+    } else if (MODE === "supabase") {
+      const channel = supabase
+        .channel(`comments:${postId}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "comments",
+            filter: `post_id=eq.${postId}`,
+          },
+          async (payload: any) => {
+            const { data: newCommentData } = await supabase
+              .from("comments")
+              .select("*, profiles(username, avatar_url)")
+              .eq("id", payload.new.id)
+              .single();
+
+            if (newCommentData) {
+              setComments((prev) => [...prev, newCommentData]);
+              setPost((prev) => {
+                if (prev && "like_count" in prev) {
+                  return { ...prev, comment_count: prev.comment_count + 1 };
+                }
+                return prev;
+              });
+            }
+          }
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    }
   }, [postId]);
 
   const fetchPost = async () => {
     try {
-      const { data, error } = await supabase
-        .from("posts")
-        .select(
+      if (MODE === "local") {
+        await initLocalDB();
+        const data = await getPost(postId);
+        setPost(data);
+      } else if (MODE === "supabase") {
+        const { data, error } = await supabase
+          .from("posts")
+          .select(
+            `
+            *,
+            profiles (username, avatar_url)
           `
-          *,
-          profiles (username, avatar_url)
-        `
-        )
-        .eq("id", postId)
-        .single();
+          )
+          .eq("id", postId)
+          .single();
 
-      if (error) throw error;
-      setPost(data);
+        if (error) throw error;
+        setPost(data);
+      }
     } catch (error) {
       console.error("Error fetching post:", error);
     } finally {
@@ -107,26 +163,32 @@ export default function PostPage() {
 
   const fetchComments = async () => {
     try {
-      const { data, error } = await supabase
-        .from("comments")
-        .select(
+      if (MODE === "local") {
+        await initLocalDB();
+        const data = await listComments(postId);
+        setComments(data);
+      } else if (MODE === "supabase") {
+        const { data, error } = await supabase
+          .from("comments")
+          .select(
+            `
+            *,
+            profiles (username, avatar_url)
           `
-          *,
-          profiles (username, avatar_url)
-        `
-        )
-        .eq("post_id", postId)
-        .order("created_at", { ascending: true });
+          )
+          .eq("post_id", postId)
+          .order("created_at", { ascending: true });
 
-      if (error) throw error;
-      setComments(data || []);
+        if (error) throw error;
+        setComments(data || []);
+      }
     } catch (error) {
       console.error("Error fetching comments:", error);
     }
   };
 
   const checkLiked = async () => {
-    if (!user) return;
+    if (MODE !== "supabase" || !user) return;
 
     try {
       const { data } = await supabase
@@ -143,68 +205,96 @@ export default function PostPage() {
   };
 
   const handleLike = async () => {
-    if (!user) {
-      router.push("/login");
-      return;
-    }
+    if (MODE === "local") {
+      setPost((prev) => {
+        if (prev && "kind" in prev) {
+          return { ...prev, likes: prev.likes + 1 };
+        }
+        return prev;
+      });
 
-    if (!post) return;
-
-    const wasLiked = liked;
-    const newCount = wasLiked ? post.like_count - 1 : post.like_count + 1;
-
-    setLiked(!wasLiked);
-    setPost({ ...post, like_count: newCount });
-
-    try {
-      let likeError;
-
-      if (wasLiked) {
-        const { error } = await supabase
-          .from("likes")
-          .delete()
-          .eq("user_id", user.id)
-          .eq("post_id", postId);
-        likeError = error;
-      } else {
-        const { error } = await supabase
-          .from("likes")
-          .insert({ user_id: user.id, post_id: postId });
-        likeError = error;
+      try {
+        await likePost(postId);
+      } catch (error) {
+        console.error("Error liking post:", error);
+        setPost((prev) => {
+          if (prev && "kind" in prev) {
+            return { ...prev, likes: Math.max(0, prev.likes - 1) };
+          }
+          return prev;
+        });
+      }
+    } else if (MODE === "supabase") {
+      if (!user) {
+        router.push("/auth/login");
+        return;
       }
 
-      if (likeError) throw likeError;
+      if (!post || !("like_count" in post)) return;
 
-      const { error: updateError } = await supabase
-        .from("posts")
-        .update({ like_count: newCount })
-        .eq("id", postId);
+      const wasLiked = liked;
+      const newCount = wasLiked ? post.like_count - 1 : post.like_count + 1;
 
-      if (updateError) throw updateError;
-    } catch (error) {
-      console.error("Error toggling like:", error);
-      setLiked(wasLiked);
-      setPost({ ...post, like_count: post.like_count });
+      setLiked(!wasLiked);
+      setPost({ ...post, like_count: newCount });
+
+      try {
+        let likeError;
+
+        if (wasLiked) {
+          const { error } = await supabase
+            .from("likes")
+            .delete()
+            .eq("user_id", user.id)
+            .eq("post_id", postId);
+          likeError = error;
+        } else {
+          const { error } = await supabase
+            .from("likes")
+            .insert({ user_id: user.id, post_id: postId });
+          likeError = error;
+        }
+
+        if (likeError) throw likeError;
+
+        const { error: updateError } = await supabase
+          .from("posts")
+          .update({ like_count: newCount })
+          .eq("id", postId);
+
+        if (updateError) throw updateError;
+      } catch (error) {
+        console.error("Error toggling like:", error);
+        setLiked(wasLiked);
+        setPost({ ...post, like_count: post.like_count });
+      }
     }
   };
 
   const handleComment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user || !newComment.trim() || submitting) return;
+    if (!newComment.trim() || submitting) return;
 
     setSubmitting(true);
     const body = newComment.trim();
 
     try {
-      const { error } = await supabase.from("comments").insert({
-        user_id: user.id,
-        post_id: postId,
-        body,
-      });
+      if (MODE === "local") {
+        await addComment(postId, body, "You");
+        setNewComment("");
+      } else if (MODE === "supabase") {
+        if (!user) return;
 
-      if (error) throw error;
+        const { error } = await supabase.from("comments").insert({
+          user_id: user.id,
+          post_id: postId,
+          body,
+        });
 
-      setNewComment("");
+        if (error) throw error;
+
+        setNewComment("");
+      }
     } catch (error) {
       console.error("Error posting comment:", error);
       alert("Failed to post comment. Please try again.");
@@ -214,8 +304,13 @@ export default function PostPage() {
   };
 
   const handleFlag = async () => {
+    if (MODE === "local") {
+      alert("Flag feature not available in local mode");
+      return;
+    }
+
     if (!user) {
-      router.push("/login");
+      router.push("/auth/login");
       return;
     }
 
@@ -238,6 +333,53 @@ export default function PostPage() {
       console.error("Error flagging post:", error);
       alert("Failed to flag post. Please try again.");
     }
+  };
+
+  const getMediaUrl = () => {
+    if (!post) return "";
+    if ("kind" in post) return post.objectUrl;
+    return post.video_url || post.image_url || "";
+  };
+
+  const isVideo = () => {
+    if (!post) return false;
+    if ("kind" in post) return post.kind === "video";
+    return !!post.video_url;
+  };
+
+  const getCaption = () => {
+    if (!post) return "";
+    if ("kind" in post) return post.caption || "";
+    return post.caption || "";
+  };
+
+  const getLikeCount = () => {
+    if (!post) return 0;
+    if ("kind" in post) return post.likes;
+    return post.like_count;
+  };
+
+  const getCommentCount = () => {
+    if (!post) return 0;
+    if ("kind" in post) return post.comments_count;
+    return post.comment_count;
+  };
+
+  const getUsername = () => {
+    if (!post) return "User";
+    if ("kind" in post) return "LocalUser";
+    return post.profiles?.username || "User";
+  };
+
+  const getUserId = () => {
+    if (!post) return "";
+    if ("kind" in post) return "";
+    return post.user_id;
+  };
+
+  const getCommentUsername = (comment: Comment) => {
+    if ("user" in comment) return comment.user;
+    return comment.profiles?.username || "User";
   };
 
   if (loading) {
@@ -263,6 +405,9 @@ export default function PostPage() {
     );
   }
 
+  const mediaUrl = getMediaUrl();
+  const postIsVideo = isVideo();
+
   return (
     <main className="container">
       <div style={{ marginBottom: 20 }}>
@@ -280,10 +425,11 @@ export default function PostPage() {
         }}
       >
         <div className="card">
-          {post.video_url && (
+          {postIsVideo ? (
             <video
-              src={post.video_url}
+              src={mediaUrl}
               controls
+              playsInline
               preload="metadata"
               style={{
                 width: "100%",
@@ -291,12 +437,10 @@ export default function PostPage() {
                 backgroundColor: "#000",
               }}
             />
-          )}
-
-          {post.image_url && (
+          ) : (
             <img
-              src={post.image_url}
-              alt={post.caption || "Post"}
+              src={mediaUrl}
+              alt={getCaption()}
               style={{ width: "100%", borderRadius: 10 }}
             />
           )}
@@ -309,18 +453,20 @@ export default function PostPage() {
               className="nav-btn"
               style={liked ? { color: "var(--accent-gold)" } : {}}
             >
-              {liked ? "❤️" : "🤍"} {post.like_count}
+              {liked ? "❤️" : "🤍"} {getLikeCount()}
             </button>
 
             <button className="nav-btn outline">
-              💬 {post.comment_count}
+              💬 {getCommentCount()}
             </button>
 
-            <div style={{ marginLeft: "auto" }}>
-              <button onClick={handleFlag} className="nav-btn outline">
-                🚩 Flag
-              </button>
-            </div>
+            {MODE === "supabase" && (
+              <div style={{ marginLeft: "auto" }}>
+                <button onClick={handleFlag} className="nav-btn outline">
+                  🚩 Flag
+                </button>
+              </div>
+            )}
           </div>
 
           <div
@@ -339,31 +485,35 @@ export default function PostPage() {
               }}
             >
               <div className="avatar" style={{ width: 40, height: 40 }}>
-                {post.profiles.username[0].toUpperCase()}
+                {getUsername()[0].toUpperCase()}
               </div>
               <div>
-                <Link
-                  href={`/profile/${post.user_id}`}
-                  style={{ fontWeight: 600 }}
-                >
-                  {post.profiles.username}
-                </Link>
+                {MODE === "supabase" && getUserId() ? (
+                  <Link
+                    href={`/profile/${getUserId()}`}
+                    style={{ fontWeight: 600 }}
+                  >
+                    {getUsername()}
+                  </Link>
+                ) : (
+                  <div style={{ fontWeight: 600 }}>{getUsername()}</div>
+                )}
                 <div style={{ fontSize: "0.9em", opacity: 0.7 }}>
                   {new Date(post.created_at).toLocaleDateString()}
                 </div>
               </div>
             </div>
 
-            {post.caption && <p style={{ marginTop: 10 }}>{post.caption}</p>}
+            {getCaption() && <p style={{ marginTop: 10 }}>{getCaption()}</p>}
           </div>
         </div>
 
         <div className="card">
           <h3 style={{ marginBottom: 20 }}>
-            Comments ({post.comment_count})
+            Comments ({getCommentCount()})
           </h3>
 
-          {user && (
+          {(MODE === "local" || user) && (
             <form
               onSubmit={handleComment}
               style={{ display: "flex", gap: 10, marginBottom: 20 }}
@@ -407,7 +557,7 @@ export default function PostPage() {
                   }}
                 >
                   <div style={{ fontWeight: 600, fontSize: "0.95em" }}>
-                    {comment.profiles?.username || "User"}
+                    {getCommentUsername(comment)}
                   </div>
                   <p style={{ marginTop: 5 }}>{comment.body}</p>
                   <div
