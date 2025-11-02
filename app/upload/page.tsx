@@ -221,7 +221,6 @@ export default function UploadPage() {
 
     try {
       const fileExt = safeFile.name.split(".").pop();
-      const isVideo = safeFile.type.startsWith("video/");
       const isImage = safeFile.type.startsWith("image/");
       
       const folder = isImage ? "images" : "videos";
@@ -232,25 +231,22 @@ export default function UploadPage() {
       const { data } = supabase.storage.from("media").getPublicUrl(fileName);
       const publicUrl = data.publicUrl;
 
-      if (!publicUrl) {
-        throw new Error("Failed to get public URL from storage");
-      }
-
-      const { data: insertData, error: dbError } = await supabase.from("posts").insert({
+      const { error: dbError } = await supabase.from("posts").insert({
         user_id: user.id,
-        video_url: isVideo ? publicUrl : null,
-        image_url: isImage ? publicUrl : null,
-        caption: caption.trim() || null,
+        video_url: publicUrl,
+        caption: caption,
         like_count: 0,
         comment_count: 0,
-      }).select();
+      });
 
       if (dbError) {
-        console.error("Database insert error (full object):", dbError);
-        throw new Error(dbError.message || dbError.hint || "Database insert failed");
+        console.error("Database insert error:", dbError);
+        setError(dbError.message);
+        setProgress(0);
+        setUploadSuccess(false);
+        return;
       }
 
-      console.log("Post saved successfully:", insertData);
       setUploadSuccess(true);
       setProgress(100);
 
@@ -260,9 +256,8 @@ export default function UploadPage() {
         router.push("/feed");
       }, 1500);
     } catch (e: any) {
-      console.error("Upload error (full object):", e);
-      const errorMessage = e.message || e.error_description || e.hint || "Upload failed";
-      setError(errorMessage);
+      console.error("Upload error:", e);
+      setError(e.message || "Upload failed");
       setProgress(0);
       setUploadSuccess(false);
     } finally {
@@ -419,7 +414,7 @@ export default function UploadPage() {
                 }}
               >
                 <span>
-                  {uploadSuccess ? "✅ Post saved successfully" : "Uploading..."}
+                  {uploadSuccess ? "✅ Uploaded successfully" : "Uploading..."}
                 </span>
                 <span>{progress}%</span>
               </div>
