@@ -93,6 +93,7 @@ export function useWebRTCBroadcaster({ sessionId, onError }: WebRTCBroadcasterOp
               type: 'candidate',
               candidate: event.candidate,
               broadcasterId: 'broadcaster',
+              viewerId: viewerId, // FIXED: Include viewer ID for proper scoping
             },
           });
         }

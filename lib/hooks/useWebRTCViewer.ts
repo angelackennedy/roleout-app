@@ -92,8 +92,8 @@ export function useWebRTCViewer({ sessionId, isLive, onError }: WebRTCViewerOpti
               });
             }
           } else if (payload.type === 'candidate' && payload.broadcasterId && payload.candidate) {
-            // Handle ICE candidate from broadcaster
-            if (pc) {
+            // Handle ICE candidate from broadcaster - FIXED: Only process if meant for this viewer
+            if (pc && payload.viewerId === viewerIdRef.current) {
               await pc.addIceCandidate(new RTCIceCandidate(payload.candidate));
             }
           } else if (payload.type === 'end') {
