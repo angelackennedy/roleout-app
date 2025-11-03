@@ -1,0 +1,66 @@
+Add recording + replay to ROLE OUT live sessions.
+
+Goal
+- While the host is live, capture the webcam stream and RECORD it in the browser.
+- When “End Live” is clicked, automatically upload the recording to Supabase Storage and attach it to the session.
+- Show a Replay link (and inline player) on /live/[id] when the session is no longer live.
+
+Schema
+1) Create table public.live_recordings (
+   id uuid primary key default gen_random_uuid(),
+   session_id uuid not null references public.live_sessions(id) on delete cascade,
+   user_id uuid not null,
+   storage_path text not null,
+   public_url text,
+   duration_seconds integer,
+   size_bytes bigint,
+   created_at timestamptz default now()
+);
+2) Enable RLS with:
+   USING (auth.uid() = user_id) and WITH CHECK (auth.uid() = user_id) for SELECT/INSERT.
+3) Create index on (session_id, created_at desc).
+
+Storage
+1) Create a Supabase Storage bucket: recordings
+2) Policy: owner can read/write their own files; public read allowed (OK) for playback links.
+3) File naming: recordings/{session_id}/{session_id}-{timestamp}.webm
+4) After upload, generate a public URL (or signed URL if you prefer) and store it in live_recordings.public_url.
+
+Host-side recording (WebRTC publisher on /test-supabase)
+1) Use MediaRecorder on the same MediaStream used for Go Live.
+2) mimeType fallback sequence:
+   - 'video/webm;codecs=vp9'
+   - 'video/webm;codecs=vp8'
+   - 'video/webm'
+3) Start recording when “Go Live” is pressed; collect chunks in an array.
+4) On “End Live” or component unmount:
+   - mediaRecorder.stop()
+   - assemble Blob = new Blob(chunks, { type: chosenMimeType })
+   - compute duration via performance timestamps (start/stop)
+   - upload Blob to Supabase Storage at the path above
+   - insert a row into public.live_recordings with session_id, user_id, storage_path, public_url, duration_seconds, size_bytes.
+
+UI/UX
+1) On /test-supabase show a small “Recording…” indicator while recording, and a progress bar during upload (use upload progress from the Supabase JS client or manual chunked upload).
+2) Disable Go Live while upload is in progress to avoid accidental double actions.
+3) Show a toast “Replay saved” with a link to open /live/{id} (or the direct public URL).
+
+Viewer page (/live/[id])
+1) If is_live = true → show live video as now.
+2) If is_live = false and a recording exists → render a player:
+   - Use native <video controls src={public_url} /> for now
+   - If multiple recordings, show the latest one first
+3) “Stream ended” message should remain visible above the replay.
+
+Code Organization
+- Keep TypeScript and 'use client' where needed.
+- Reuse existing supabase client in lib/supabase.ts.
+- Add a small util for choosing MediaRecorder mimeType with fallbacks.
+- No global CSS changes; minimal Tailwind/inline styling consistent with the app.
+
+Testing checklist (print in output):
+- /login → sign in
+- /test-supabase → Create New Session → Go Live → grant cam/mic → see “Recording…”
+- Speak/move for ~10s, then End Live → watch upload progress → see “Replay saved”
+- Supabase Storage: confirm file in recordings bucket and row in public.live_recordings
+- Open /live/{id} (now not live) → the replay video should be playable
