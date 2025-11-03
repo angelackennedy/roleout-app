@@ -145,6 +145,33 @@ export default function CreatorDashboard() {
           </div>
         </div>
 
+        {/* Creator Monetization Links */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+          <Link 
+            href="/creator/fund"
+            className="bg-gradient-to-br from-yellow-600 to-yellow-800 rounded-xl p-6 shadow-lg hover:shadow-xl transition block"
+          >
+            <div className="flex items-center justify-between mb-2">
+              <div className="text-2xl">💰</div>
+              <div className="text-xs text-yellow-200 uppercase font-semibold">Creator Fund</div>
+            </div>
+            <div className="text-xl font-bold mb-1">View Earnings</div>
+            <div className="text-sm text-yellow-200">Track your estimated revenue from video views</div>
+          </Link>
+
+          <Link 
+            href="/creator/gifts"
+            className="bg-gradient-to-br from-orange-600 to-orange-800 rounded-xl p-6 shadow-lg hover:shadow-xl transition block"
+          >
+            <div className="flex items-center justify-between mb-2">
+              <div className="text-2xl">🎁</div>
+              <div className="text-xs text-orange-200 uppercase font-semibold">Virtual Gifts</div>
+            </div>
+            <div className="text-xl font-bold mb-1">Gifts Received</div>
+            <div className="text-sm text-orange-200">View gifts from your fans and supporters</div>
+          </Link>
+        </div>
+
         {data.dailyFollowers.length > 0 && (
           <div className="bg-gray-800 rounded-xl p-6 shadow-lg mb-8">
             <h2 className="text-2xl font-bold mb-4">Follower Growth</h2>
