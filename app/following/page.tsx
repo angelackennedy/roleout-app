@@ -321,7 +321,18 @@ export default function FollowingFeed() {
       
       const reportedPostIds = reportedPosts?.map(r => r.post_id) || [];
 
-      // Fetch posts from followed users, excluding reported posts
+      // Get hidden posts to exclude
+      const { data: hiddenPosts } = await supabase
+        .from('hidden_posts')
+        .select('post_id')
+        .eq('user_id', user.id);
+      
+      const hiddenPostIds = hiddenPosts?.map(h => h.post_id) || [];
+
+      // Combine excluded post IDs
+      const excludedPostIds = [...new Set([...reportedPostIds, ...hiddenPostIds])];
+
+      // Fetch posts from followed users, excluding reported and hidden posts
       let query = supabase
         .from('posts')
         .select(`
@@ -335,8 +346,8 @@ export default function FollowingFeed() {
         `)
         .in('user_id', followingIds);
 
-      if (reportedPostIds.length > 0) {
-        query = query.not('id', 'in', reportedPostIds);
+      if (excludedPostIds.length > 0) {
+        query = query.not('id', 'in', excludedPostIds);
       }
 
       const { data, error: fetchError } = await query

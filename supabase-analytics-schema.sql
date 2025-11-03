@@ -127,6 +127,11 @@ BEGIN
     FROM public.reports
     WHERE reporter_id = p_user_id
   ),
+  hidden_posts AS (
+    SELECT post_id
+    FROM public.hidden_posts
+    WHERE user_id = p_user_id
+  ),
   ranked_posts AS (
     SELECT 
       p.id as post_id,
@@ -143,6 +148,7 @@ BEGIN
     FROM public.posts p
     LEFT JOIN user_impressions ui ON p.id = ui.post_id
     WHERE p.id NOT IN (SELECT post_id FROM reported_posts)
+      AND p.id NOT IN (SELECT post_id FROM hidden_posts)
   ),
   scored_posts AS (
     SELECT 

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
+import { supabase } from '@/lib/supabase';
 import { usePostLike } from '@/lib/hooks/usePostLike';
 import { CommentsDrawer } from '@/components/CommentsDrawer';
 import { ReportDialog } from '@/components/ReportDialog';
@@ -431,6 +432,61 @@ export default function VideoPost({ post, isActive, userId = null }: VideoPostPr
                 boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
               }}
             >
+              <button
+                onClick={async () => {
+                  if (!userId) {
+                    alert('Please login to hide posts');
+                    setMenuOpen(false);
+                    return;
+                  }
+                  
+                  try {
+                    const { error } = await supabase
+                      .from('hidden_posts')
+                      .insert({
+                        user_id: userId,
+                        post_id: post.id,
+                      });
+
+                    if (error) {
+                      if (error.code === '23505') {
+                        alert('Post already hidden');
+                      } else {
+                        console.error('Error hiding post:', error);
+                        alert('Failed to hide post');
+                      }
+                    } else {
+                      alert('Post hidden from your feed');
+                      window.location.reload();
+                    }
+                  } catch (err) {
+                    console.error('Error:', err);
+                    alert('Failed to hide post');
+                  }
+                  setMenuOpen(false);
+                }}
+                style={{
+                  width: '100%',
+                  padding: 12,
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'white',
+                  fontSize: 14,
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  borderRadius: 8,
+                  transition: 'background 0.2s',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'rgba(212,175,55,0.2)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'transparent';
+                }}
+              >
+                🙈 Hide this post
+              </button>
               <button
                 onClick={() => {
                   setMenuOpen(false);
