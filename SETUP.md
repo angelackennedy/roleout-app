@@ -132,7 +132,28 @@ Creates the reporting system for content moderation:
 - Reports are stored for admin review (admins have `role = 'admin'` in JWT)
 - Updated RPC functions (`search_posts`, `get_posts_by_hashtag`) filter out reported posts
 
-### 12. RLS and Performance Audit (IMPORTANT)
+### 12. Analytics and View Tracking
+File: `supabase-analytics-schema.sql`
+
+Creates the analytics system for tracking post impressions and view counts:
+- `post_impressions` table with post_id, user_id, created_at
+- Unique constraint prevents duplicate impressions per user per day
+- Adds `view_count` column to posts table
+- **Automatic trigger** updates view_count when impressions are inserted
+- Indexes on post_id and user_id for fast lookups
+
+**How it works:**
+- When a video is 50% visible for >= 2 seconds, an impression is tracked
+- Unique constraint ensures each user can only create one impression per post per day
+- View count automatically updates via database trigger (counts unique viewers)
+- View count displayed on the post UI with eye icon (👁️)
+- API route `/api/impressions` handles impression tracking
+
+**RLS Security:**
+- Users can only INSERT their own impressions (authenticated, user_id = auth.uid())
+- Anyone can SELECT impressions (needed for view count calculations)
+
+### 13. RLS and Performance Audit (IMPORTANT)
 File: `supabase-rls-indexes-audit.sql`
 
 **Run this AFTER all other SQL files** to verify and optimize your setup:
