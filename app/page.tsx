@@ -286,6 +286,17 @@ export default function Home() {
       const from = pageNum * POSTS_PER_PAGE;
       const to = from + POSTS_PER_PAGE - 1;
 
+      let reportedPostIds: string[] = [];
+      
+      if (user) {
+        const { data: reportedPosts } = await supabase
+          .from('reports')
+          .select('post_id')
+          .eq('reporter_id', user.id);
+        
+        reportedPostIds = reportedPosts?.map(r => r.post_id) || [];
+      }
+
       let query = supabase
         .from('posts')
         .select(`
@@ -298,13 +309,8 @@ export default function Home() {
           )
         `);
 
-      if (user) {
-        query = query.not('id', 'in', 
-          supabase
-            .from('reports')
-            .select('post_id')
-            .eq('reporter_id', user.id)
-        );
+      if (reportedPostIds.length > 0) {
+        query = query.not('id', 'in', reportedPostIds);
       }
 
       const { data, error: fetchError } = await query

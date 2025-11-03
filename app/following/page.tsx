@@ -313,6 +313,14 @@ export default function FollowingFeed() {
         return;
       }
 
+      // Get reported posts to exclude
+      const { data: reportedPosts } = await supabase
+        .from('reports')
+        .select('post_id')
+        .eq('reporter_id', user.id);
+      
+      const reportedPostIds = reportedPosts?.map(r => r.post_id) || [];
+
       // Fetch posts from followed users, excluding reported posts
       let query = supabase
         .from('posts')
@@ -327,12 +335,9 @@ export default function FollowingFeed() {
         `)
         .in('user_id', followingIds);
 
-      query = query.not('id', 'in', 
-        supabase
-          .from('reports')
-          .select('post_id')
-          .eq('reporter_id', user.id)
-      );
+      if (reportedPostIds.length > 0) {
+        query = query.not('id', 'in', reportedPostIds);
+      }
 
       const { data, error: fetchError } = await query
         .order('created_at', { ascending: false })
