@@ -31,6 +31,9 @@ export default function Header() {
               <Link href="/following" className="hover:text-gray-400">
                 Following
               </Link>
+              <Link href="/search" className="hover:text-gray-400">
+                Search
+              </Link>
               <Link href="/upload" className="hover:text-gray-400">
                 Upload
               </Link>

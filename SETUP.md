@@ -92,6 +92,17 @@ Creates the `follows` table for user follow relationships:
 
 **Powers the Following feed** - See posts only from users you follow!
 
+### 9. Search RPC Functions
+File: `supabase-search-rpc.sql`
+
+Creates search and discovery functions:
+- `search_posts(search_query, result_limit, result_offset)` - Search posts by caption or hashtag
+- `search_users(search_query, result_limit, result_offset)` - Search users by username or display name
+- `get_trending_hashtags(result_limit)` - Get hashtags ordered by post count
+- `get_posts_by_hashtag(tag_name, result_limit, result_offset)` - Get all posts with a specific hashtag
+
+**Powers the Search page and hashtag discovery!**
+
 ## Storage Buckets Summary
 
 After running all SQL files, you should have these buckets:
@@ -123,11 +134,16 @@ Once setup is complete, you can:
 4. **Browse feeds**:
    - **For You** (`/`) - Global feed with all posts, ordered by recency
    - **Following** (`/following`) - Posts only from users you follow
-5. **Like posts** - Click heart button (optimistic UI, instant feedback)
-6. **Comment on posts** - Click comment button to open drawer, add comments with realtime updates
-7. **Follow users** - Visit `/u/[username]` and click Follow/Unfollow button
-8. **View profiles** - See follower/following counts, bio, and join date
-9. **Live streaming** - Join sessions at `/live/[sessionId]` with WebRTC
+5. **Search & Discover** (`/search`) - Three tabs for discovery:
+   - **Top** - Search posts by caption or hashtag
+   - **Users** - Find users by username or display name
+   - **Tags** - Browse trending hashtags by popularity
+6. **Hashtag pages** (`/tag/[name]`) - View all posts with a specific hashtag
+7. **Like posts** - Click heart button (optimistic UI, instant feedback)
+8. **Comment on posts** - Click comment button to open drawer, add comments with realtime updates
+9. **Follow users** - Visit `/u/[username]` and click Follow/Unfollow button
+10. **View profiles** - See follower/following counts, bio, and join date
+11. **Live streaming** - Join sessions at `/live/[sessionId]` with WebRTC
 
 ## Troubleshooting
 
