@@ -318,6 +318,13 @@ RollCall has excellent security posture with:
 
 The remaining 5 points are for nice-to-have features like rate limiting and audit logging, which are not critical for initial launch but should be considered for production scale.
 
+**Important Note:** The `supabase-rls-indexes-audit.sql` file is comprehensive and recreates ALL storage policies for avatars, posts, and recordings buckets to ensure they're properly configured. This is safe because:
+- All storage policy changes are wrapped in a **transaction** (`BEGIN`...`COMMIT`) for true atomicity
+- If any policy creation fails, the entire transaction rolls back - no partial updates
+- All policies are recreated with identical security constraints
+- The script is idempotent - safe to run multiple times
+- It verifies configuration with detailed audit reports showing policy counts
+
 **Recommendation:** ✅ **Safe to deploy to production** after running `supabase-rls-indexes-audit.sql`.
 
 ---

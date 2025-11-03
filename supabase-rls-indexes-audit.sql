@@ -97,10 +97,114 @@ VALUES ('recordings', 'recordings', true)
 ON CONFLICT (id) DO NOTHING;
 
 -- ============================================================================
--- STORAGE RLS POLICIES FOR RECORDINGS BUCKET
+-- STORAGE RLS POLICIES - VERIFY ALL BUCKETS ARE SECURED
+-- ============================================================================
+-- Note: This section ensures all storage policies exist for all buckets
+-- Storage policies in Supabase are shared across all buckets on storage.objects table
+-- We wrap all policy changes in a transaction to ensure atomicity
+
+-- Begin transaction to ensure all-or-nothing policy updates
+BEGIN;
+
+-- ============================================================================
+-- AVATARS BUCKET POLICIES
 -- ============================================================================
 
--- Drop existing policies if they exist
+-- Drop and recreate avatars policies to ensure they are correct
+DROP POLICY IF EXISTS "Avatar images are publicly accessible" ON storage.objects;
+DROP POLICY IF EXISTS "Users can upload their own avatar" ON storage.objects;
+DROP POLICY IF EXISTS "Users can update their own avatar" ON storage.objects;
+DROP POLICY IF EXISTS "Users can delete their own avatar" ON storage.objects;
+
+-- Policy: Anyone can view avatars
+CREATE POLICY "Avatar images are publicly accessible"
+  ON storage.objects FOR SELECT
+  TO public
+  USING (bucket_id = 'avatars');
+
+-- Policy: Authenticated users can upload their own avatar
+CREATE POLICY "Users can upload their own avatar"
+  ON storage.objects FOR INSERT
+  TO authenticated
+  WITH CHECK (
+    bucket_id = 'avatars' AND 
+    (storage.foldername(name))[1] = auth.uid()::text
+  );
+
+-- Policy: Users can update their own avatar
+CREATE POLICY "Users can update their own avatar"
+  ON storage.objects FOR UPDATE
+  TO authenticated
+  USING (
+    bucket_id = 'avatars' AND 
+    (storage.foldername(name))[1] = auth.uid()::text
+  )
+  WITH CHECK (
+    bucket_id = 'avatars' AND 
+    (storage.foldername(name))[1] = auth.uid()::text
+  );
+
+-- Policy: Users can delete their own avatar
+CREATE POLICY "Users can delete their own avatar"
+  ON storage.objects FOR DELETE
+  TO authenticated
+  USING (
+    bucket_id = 'avatars' AND 
+    (storage.foldername(name))[1] = auth.uid()::text
+  );
+
+-- ============================================================================
+-- POSTS BUCKET POLICIES
+-- ============================================================================
+
+-- Drop and recreate posts policies to ensure they are correct
+DROP POLICY IF EXISTS "Post videos are publicly accessible" ON storage.objects;
+DROP POLICY IF EXISTS "Users can upload their own posts" ON storage.objects;
+DROP POLICY IF EXISTS "Users can update their own posts" ON storage.objects;
+DROP POLICY IF EXISTS "Users can delete their own posts" ON storage.objects;
+
+-- Policy: Anyone can view posts
+CREATE POLICY "Post videos are publicly accessible"
+  ON storage.objects FOR SELECT
+  TO public
+  USING (bucket_id = 'posts');
+
+-- Policy: Authenticated users can upload their own posts
+CREATE POLICY "Users can upload their own posts"
+  ON storage.objects FOR INSERT
+  TO authenticated
+  WITH CHECK (
+    bucket_id = 'posts' AND 
+    (storage.foldername(name))[1] = auth.uid()::text
+  );
+
+-- Policy: Users can update their own posts
+CREATE POLICY "Users can update their own posts"
+  ON storage.objects FOR UPDATE
+  TO authenticated
+  USING (
+    bucket_id = 'posts' AND 
+    (storage.foldername(name))[1] = auth.uid()::text
+  )
+  WITH CHECK (
+    bucket_id = 'posts' AND 
+    (storage.foldername(name))[1] = auth.uid()::text
+  );
+
+-- Policy: Users can delete their own posts
+CREATE POLICY "Users can delete their own posts"
+  ON storage.objects FOR DELETE
+  TO authenticated
+  USING (
+    bucket_id = 'posts' AND 
+    (storage.foldername(name))[1] = auth.uid()::text
+  );
+
+-- ============================================================================
+-- RECORDINGS BUCKET POLICIES
+-- ============================================================================
+
+-- Drop and recreate recordings policies to ensure they are correct
 DROP POLICY IF EXISTS "Recording videos are publicly accessible" ON storage.objects;
 DROP POLICY IF EXISTS "Users can upload their own recordings" ON storage.objects;
 DROP POLICY IF EXISTS "Users can update their own recordings" ON storage.objects;
@@ -143,6 +247,9 @@ CREATE POLICY "Users can delete their own recordings"
     (storage.foldername(name))[1] = auth.uid()::text
   );
 
+-- Commit transaction - all storage policies updated atomically
+COMMIT;
+
 -- ============================================================================
 -- FINAL AUDIT REPORT
 -- ============================================================================
@@ -151,6 +258,8 @@ DO $$
 DECLARE
   bucket_count INTEGER;
   index_count INTEGER;
+  table_policy_count INTEGER;
+  storage_policy_count INTEGER;
 BEGIN
   -- Count storage buckets
   SELECT COUNT(*) INTO bucket_count
@@ -163,11 +272,31 @@ BEGIN
   WHERE schemaname = 'public'
     AND tablename IN ('profiles', 'posts', 'post_likes', 'post_comments', 'follows', 'notifications');
   
+  -- Count RLS policies on tables
+  SELECT COUNT(*) INTO table_policy_count
+  FROM pg_policies
+  WHERE schemaname = 'public'
+    AND tablename IN ('profiles', 'posts', 'post_likes', 'post_comments', 'follows', 'notifications');
+  
+  -- Count storage policies
+  SELECT COUNT(*) INTO storage_policy_count
+  FROM pg_policies
+  WHERE schemaname = 'storage'
+    AND tablename = 'objects';
+  
   RAISE NOTICE '====================================';
   RAISE NOTICE 'AUDIT COMPLETE';
   RAISE NOTICE '====================================';
   RAISE NOTICE 'Storage buckets configured: %', bucket_count;
-  RAISE NOTICE 'Performance indexes created: %', index_count;
+  RAISE NOTICE 'Expected: 3 (avatars, posts, recordings)';
+  RAISE NOTICE '------------------------------------';
+  RAISE NOTICE 'Table RLS policies: %', table_policy_count;
+  RAISE NOTICE 'Expected minimum: 18 policies';
+  RAISE NOTICE '------------------------------------';
+  RAISE NOTICE 'Storage policies: %', storage_policy_count;
+  RAISE NOTICE 'Expected: 12 policies (4 per bucket)';
+  RAISE NOTICE '------------------------------------';
+  RAISE NOTICE 'Performance indexes: %', index_count;
   RAISE NOTICE '====================================';
   RAISE NOTICE 'All RLS policies verified ✓';
   RAISE NOTICE 'All indexes optimized ✓';

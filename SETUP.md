@@ -124,14 +124,17 @@ File: `supabase-rls-indexes-audit.sql`
 - ✅ Verifies RLS is enabled on all tables
 - ✅ Adds missing performance indexes (composite indexes for queries)
 - ✅ Creates `recordings` storage bucket for live stream recordings
-- ✅ Verifies all storage bucket policies are secure
-- ✅ Provides audit report showing configuration status
+- ✅ **Recreates ALL storage bucket policies** to ensure they're properly secured
+- ✅ Provides detailed audit report showing configuration status
 
 **Key improvements:**
 - Composite index on `post_comments(post_id, created_at ASC)` for faster comment loading
 - Composite index on `notifications(user_id, created_at DESC)` for faster notification queries
 - Additional indexes for user profile pages and activity feeds
 - Recordings bucket with same security as avatars/posts buckets
+- Comprehensive storage policy verification (drops and recreates all policies)
+
+**Note:** This script recreates all storage policies for avatars, posts, and recordings to ensure they're all properly configured. All storage policy changes are wrapped in a **transaction** to ensure atomicity - if anything fails, all changes are rolled back automatically. This ensures your buckets are never left in a partially-secured state.
 
 This file is **idempotent** - safe to run multiple times!
 
