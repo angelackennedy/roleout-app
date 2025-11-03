@@ -2,9 +2,11 @@
 
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
+import { useNotificationCount } from "@/lib/hooks/useNotificationCount";
 
 export default function Header() {
   const { user, signOut } = useAuth();
+  const { unreadCount } = useNotificationCount(user?.id || null);
 
   return (
     <header
@@ -33,6 +35,32 @@ export default function Header() {
               </Link>
               <Link href="/search" className="hover:text-gray-400">
                 Search
+              </Link>
+              <Link 
+                href="/notifications" 
+                className="hover:text-gray-400"
+                style={{ position: 'relative', display: 'inline-block' }}
+              >
+                <span>🔔</span>
+                {unreadCount > 0 && (
+                  <span style={{
+                    position: 'absolute',
+                    top: -6,
+                    right: -8,
+                    background: '#ff4444',
+                    color: 'white',
+                    fontSize: 10,
+                    fontWeight: 600,
+                    borderRadius: '50%',
+                    width: 16,
+                    height: 16,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}>
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </span>
+                )}
               </Link>
               <Link href="/upload" className="hover:text-gray-400">
                 Upload
