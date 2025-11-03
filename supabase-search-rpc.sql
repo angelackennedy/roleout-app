@@ -5,7 +5,8 @@
 CREATE OR REPLACE FUNCTION search_posts(
   search_query TEXT,
   result_limit INTEGER DEFAULT 20,
-  result_offset INTEGER DEFAULT 0
+  result_offset INTEGER DEFAULT 0,
+  current_user_id UUID DEFAULT NULL
 )
 RETURNS TABLE (
   id UUID,
@@ -44,8 +45,16 @@ BEGIN
   FROM public.posts p
   INNER JOIN public.profiles pr ON p.user_id = pr.id
   WHERE 
-    p.caption ILIKE '%' || search_query || '%'
-    OR search_query = ANY(p.hashtags)
+    (p.caption ILIKE '%' || search_query || '%'
+    OR search_query = ANY(p.hashtags))
+    -- Exclude posts reported by current user
+    AND (
+      current_user_id IS NULL
+      OR NOT EXISTS (
+        SELECT 1 FROM public.reports r
+        WHERE r.post_id = p.id AND r.reporter_id = current_user_id
+      )
+    )
   ORDER BY p.created_at DESC
   LIMIT result_limit
   OFFSET result_offset;
@@ -116,7 +125,8 @@ $$;
 CREATE OR REPLACE FUNCTION get_posts_by_hashtag(
   tag_name TEXT,
   result_limit INTEGER DEFAULT 20,
-  result_offset INTEGER DEFAULT 0
+  result_offset INTEGER DEFAULT 0,
+  current_user_id UUID DEFAULT NULL
 )
 RETURNS TABLE (
   id UUID,
@@ -154,7 +164,16 @@ BEGIN
     pr.avatar_url
   FROM public.posts p
   INNER JOIN public.profiles pr ON p.user_id = pr.id
-  WHERE tag_name = ANY(p.hashtags)
+  WHERE 
+    tag_name = ANY(p.hashtags)
+    -- Exclude posts reported by current user
+    AND (
+      current_user_id IS NULL
+      OR NOT EXISTS (
+        SELECT 1 FROM public.reports r
+        WHERE r.post_id = p.id AND r.reporter_id = current_user_id
+      )
+    )
   ORDER BY p.created_at DESC
   LIMIT result_limit
   OFFSET result_offset;

@@ -64,6 +64,7 @@ export default function SearchPage() {
         search_query: query,
         result_limit: 50,
         result_offset: 0,
+        current_user_id: user?.id || null,
       });
 
       if (error) throw error;

@@ -313,8 +313,8 @@ export default function FollowingFeed() {
         return;
       }
 
-      // Fetch posts from followed users
-      const { data, error: fetchError } = await supabase
+      // Fetch posts from followed users, excluding reported posts
+      let query = supabase
         .from('posts')
         .select(`
           *,
@@ -325,7 +325,16 @@ export default function FollowingFeed() {
             avatar_url
           )
         `)
-        .in('user_id', followingIds)
+        .in('user_id', followingIds);
+
+      query = query.not('id', 'in', 
+        supabase
+          .from('reports')
+          .select('post_id')
+          .eq('reporter_id', user.id)
+      );
+
+      const { data, error: fetchError } = await query
         .order('created_at', { ascending: false })
         .range(from, to);
 

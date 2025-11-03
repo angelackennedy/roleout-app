@@ -42,6 +42,7 @@ export default function TagPage() {
         tag_name: tagName,
         result_limit: POSTS_PER_PAGE,
         result_offset: pageNum * POSTS_PER_PAGE,
+        current_user_id: user?.id || null,
       });
 
       if (error) throw error;

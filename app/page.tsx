@@ -286,7 +286,7 @@ export default function Home() {
       const from = pageNum * POSTS_PER_PAGE;
       const to = from + POSTS_PER_PAGE - 1;
 
-      const { data, error: fetchError } = await supabase
+      let query = supabase
         .from('posts')
         .select(`
           *,
@@ -296,7 +296,18 @@ export default function Home() {
             display_name,
             avatar_url
           )
-        `)
+        `);
+
+      if (user) {
+        query = query.not('id', 'in', 
+          supabase
+            .from('reports')
+            .select('post_id')
+            .eq('reporter_id', user.id)
+        );
+      }
+
+      const { data, error: fetchError } = await query
         .order('created_at', { ascending: false })
         .range(from, to);
 
