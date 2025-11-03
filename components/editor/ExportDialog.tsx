@@ -11,10 +11,11 @@ interface ExportDialogProps {
   project: EditorProject;
   assets: Asset[];
   userId: string;
+  selectedSound?: { id: string; file_url: string } | null;
   onClose: () => void;
 }
 
-export function ExportDialog({ project, assets, userId, onClose }: ExportDialogProps) {
+export function ExportDialog({ project, assets, userId, selectedSound, onClose }: ExportDialogProps) {
   const [settings, setSettings] = useState<ExportSettings>({
     resolution: '1080p',
     fps: 30,
@@ -95,10 +96,32 @@ export function ExportDialog({ project, assets, userId, onClose }: ExportDialogP
         .flatMap(t => t.clips)
         .filter(c => c.type === 'audio' || (c.type === 'video' && !c.muted));
 
-      if (audioClips.length > 0) {
+      let soundAudioElement: HTMLAudioElement | undefined;
+      
+      if (audioClips.length > 0 || selectedSound) {
         audioContext = new AudioContext();
+        await audioContext.resume();
         dest = audioContext.createMediaStreamDestination();
-        // Note: Full audio mixing would be implemented here
+        
+        // Load and mix selected sound if present
+        if (selectedSound) {
+          soundAudioElement = document.createElement('audio');
+          soundAudioElement.src = selectedSound.file_url;
+          soundAudioElement.crossOrigin = 'anonymous';
+          soundAudioElement.loop = true;
+          
+          await new Promise<void>((resolve) => {
+            soundAudioElement!.addEventListener('loadedmetadata', () => resolve());
+            soundAudioElement!.addEventListener('error', () => resolve());
+          });
+          
+          await soundAudioElement.play().catch(console.error);
+          const soundSource = audioContext.createMediaElementSource(soundAudioElement);
+          soundSource.connect(dest);
+          soundSource.connect(audioContext.destination);
+        }
+        
+        // Note: Full audio mixing for timeline clips would be implemented here
       }
 
       const finalStream = audioContext && dest 
@@ -114,6 +137,10 @@ export function ExportDialog({ project, assets, userId, onClose }: ExportDialogP
       mediaRecorder.ondataavailable = (e) => chunks.push(e.data);
 
       mediaRecorder.onstop = async () => {
+        if (soundAudioElement) {
+          soundAudioElement.pause();
+          soundAudioElement.src = '';
+        }
         if (audioContext) audioContext.close();
         const blob = new Blob(chunks, { type: 'video/webm' });
         await uploadAndCreateDraft(blob);

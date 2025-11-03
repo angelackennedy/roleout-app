@@ -8,6 +8,7 @@ import { Timeline } from './Timeline';
 import { Inspector } from './Inspector';
 import { ExportDialog } from './ExportDialog';
 import { EditorProject, Track, Clip, Asset } from './types';
+import SoundPicker from '@/components/SoundPicker';
 
 interface VideoEditorProps {
   userId: string;
@@ -26,7 +27,9 @@ export function VideoEditor({ userId }: VideoEditorProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [showExportDialog, setShowExportDialog] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [selectedSound, setSelectedSound] = useState<{ id: string; file_url: string } | null>(null);
   const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   // Auto-save project
   const saveProject = useCallback(async () => {
@@ -248,11 +251,35 @@ export function VideoEditor({ userId }: VideoEditorProps) {
               isPlaying={isPlaying}
               assets={assets}
             />
-            <Inspector
-              selectedClip={selectedClip}
-              onUpdateClip={updateClip}
-              onDeleteClip={deleteClip}
-            />
+            <div style={{ 
+              width: 300, 
+              borderLeft: '1px solid #333',
+              display: 'flex',
+              flexDirection: 'column',
+            }}>
+              <div style={{ 
+                padding: 16, 
+                borderBottom: '1px solid #333',
+                background: '#0f0f0f',
+              }}>
+                <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>
+                  Sound
+                </h3>
+                <audio ref={audioRef} className="hidden" />
+                <SoundPicker
+                  selectedSoundId={selectedSound?.id || null}
+                  onSelectSound={(sound) => setSelectedSound(sound)}
+                  audioRef={audioRef}
+                />
+              </div>
+              <div style={{ flex: 1, overflow: 'auto' }}>
+                <Inspector
+                  selectedClip={selectedClip}
+                  onUpdateClip={updateClip}
+                  onDeleteClip={deleteClip}
+                />
+              </div>
+            </div>
           </div>
 
           {/* Bottom: Timeline */}
@@ -276,6 +303,7 @@ export function VideoEditor({ userId }: VideoEditorProps) {
           project={project}
           assets={assets}
           userId={userId}
+          selectedSound={selectedSound}
           onClose={() => setShowExportDialog(false)}
         />
       )}
