@@ -85,7 +85,7 @@ CREATE POLICY "Users can add themselves to new conversations"
   ON public.conversation_members
   FOR INSERT
   TO authenticated
-  WITH CHECK (true);
+  WITH CHECK (auth.uid() = user_id);
 
 -- Messages policies
 CREATE POLICY "Users can view messages in their conversations"

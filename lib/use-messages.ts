@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from './supabase';
 import { RealtimeChannel } from '@supabase/supabase-js';
 
@@ -14,12 +14,14 @@ export interface Message {
     display_name: string | null;
     avatar_url: string | null;
   };
+  _optimistic?: boolean;
 }
 
 export function useMessages(conversationId: string | undefined, userId: string | undefined) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const optimisticIdCounter = useRef(0);
 
   const fetchMessages = useCallback(async () => {
     if (!conversationId || !userId) {
@@ -69,18 +71,37 @@ export function useMessages(conversationId: string | undefined, userId: string |
         async (payload) => {
           const newMessage = payload.new as Message;
 
+          setMessages((prev) => {
+            const optimisticIndex = prev.findIndex(
+              (m) => m._optimistic && m.body === newMessage.body && m.sender_id === newMessage.sender_id
+            );
+            
+            if (optimisticIndex !== -1) {
+              const updated = [...prev];
+              updated[optimisticIndex] = {
+                ...newMessage,
+                sender: prev[optimisticIndex].sender,
+                _optimistic: false,
+              };
+              return updated;
+            }
+
+            return [...prev, newMessage];
+          });
+
           const { data: senderData } = await supabase
             .from('profiles')
             .select('id, username, display_name, avatar_url')
             .eq('id', newMessage.sender_id)
             .single();
 
-          const messageWithSender = {
-            ...newMessage,
-            sender: senderData || undefined,
-          };
-
-          setMessages((prev) => [...prev, messageWithSender]);
+          if (senderData) {
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === newMessage.id ? { ...m, sender: senderData } : m
+              )
+            );
+          }
         }
       )
       .subscribe();
@@ -93,6 +114,18 @@ export function useMessages(conversationId: string | undefined, userId: string |
   const sendMessage = useCallback(
     async (body: string) => {
       if (!conversationId || !userId || !body.trim()) return null;
+
+      const optimisticId = `optimistic-${++optimisticIdCounter.current}`;
+      const optimisticMessage: Message = {
+        id: optimisticId,
+        conversation_id: conversationId,
+        sender_id: userId,
+        body: body.trim(),
+        created_at: new Date().toISOString(),
+        _optimistic: true,
+      };
+
+      setMessages((prev) => [...prev, optimisticMessage]);
 
       try {
         const { data, error: sendError } = await supabase
@@ -111,6 +144,9 @@ export function useMessages(conversationId: string | undefined, userId: string |
       } catch (err: any) {
         console.error('Error sending message:', err);
         setError(err.message);
+        
+        setMessages((prev) => prev.filter((m) => m.id !== optimisticId));
+        
         return null;
       }
     },
