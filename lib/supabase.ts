@@ -169,6 +169,35 @@ export type Database = {
           created_at?: string;
         };
       };
+      live_sessions: {
+        Row: {
+          id: string;
+          user_id: string;
+          title: string;
+          is_live: boolean;
+          started_at: string;
+          ended_at: string | null;
+          viewers: number;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          title: string;
+          is_live?: boolean;
+          started_at?: string;
+          ended_at?: string | null;
+          viewers?: number;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          title?: string;
+          is_live?: boolean;
+          started_at?: string;
+          ended_at?: string | null;
+          viewers?: number;
+        };
+      };
     };
   };
 };
