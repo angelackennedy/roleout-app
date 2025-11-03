@@ -27,6 +27,24 @@ ON public.live_reactions
 FOR SELECT
 USING (true);
 
+-- Function to get reaction counts per emoji for a session
+CREATE OR REPLACE FUNCTION get_reaction_counts(p_session_id UUID)
+RETURNS TABLE(emoji TEXT, count BIGINT) AS $$
+BEGIN
+  RETURN QUERY
+  SELECT 
+    lr.emoji,
+    COUNT(*)::BIGINT as count
+  FROM live_reactions lr
+  WHERE lr.session_id = p_session_id
+  GROUP BY lr.emoji;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Grant execute permissions
+GRANT EXECUTE ON FUNCTION get_reaction_counts(UUID) TO authenticated;
+GRANT EXECUTE ON FUNCTION get_reaction_counts(UUID) TO anon;
+
 -- Enable Realtime for live_reactions table
 -- Note: Run this in Supabase SQL editor or enable via Dashboard > Database > Replication
 ALTER PUBLICATION supabase_realtime ADD TABLE public.live_reactions;

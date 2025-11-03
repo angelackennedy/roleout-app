@@ -45,30 +45,30 @@ export default function LiveReactions({ sessionId, userId }: LiveReactionsProps)
     '👏': [],
   });
 
-  // Fetch initial reaction counts
+  // Fetch initial reaction counts using aggregate function
   const fetchReactions = async () => {
     try {
-      const { data, error } = await supabase
-        .from('live_reactions')
-        .select('emoji')
-        .eq('session_id', sessionId)
-        .order('created_at', { ascending: false })
-        .limit(500);
+      const { data, error } = await supabase.rpc('get_reaction_counts', {
+        p_session_id: sessionId,
+      });
 
       if (error) {
         console.error('Error fetching reactions:', error);
       } else {
-        // Compute counts
+        // Initialize counts
         const newCounts: Record<Emoji, number> = {
           '❤️': 0,
           '🔥': 0,
           '👏': 0,
         };
-        data?.forEach((reaction) => {
-          if (reaction.emoji in newCounts) {
-            newCounts[reaction.emoji as Emoji]++;
+        
+        // Set counts from RPC results
+        data?.forEach((row: { emoji: string; count: number }) => {
+          if (row.emoji in newCounts) {
+            newCounts[row.emoji as Emoji] = row.count;
           }
         });
+        
         setCounts(newCounts);
       }
     } catch (err) {
