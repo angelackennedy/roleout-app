@@ -1,231 +1,425 @@
 'use client';
 
-import Link from "next/link";
-import { useState, useEffect } from "react";
-import { supabase } from "@/lib/supabase";
-import { formatRelativeTime } from "@/lib/time-utils";
+import { useState, useEffect, useRef } from 'react';
+import { supabase } from '@/lib/supabase';
+import Link from 'next/link';
+import { formatRelativeTime } from '@/lib/time-utils';
 
-type LiveSession = {
+type Profile = {
   id: string;
-  user_id: string;
-  title: string;
-  is_live: boolean;
-  started_at: string;
-  ended_at: string | null;
-  viewers: number;
+  username: string;
+  display_name: string | null;
+  avatar_url: string | null;
 };
 
+type Post = {
+  id: string;
+  user_id: string;
+  video_url: string;
+  cover_url: string | null;
+  caption: string | null;
+  hashtags: string[] | null;
+  like_count: number;
+  comment_count: number;
+  share_count: number;
+  created_at: string;
+  profiles: Profile;
+};
+
+function VideoPost({ post, isVisible }: { post: Post; isVisible: boolean }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    if (isVisible) {
+      video.play().catch(() => {});
+    } else {
+      video.pause();
+    }
+  }, [isVisible]);
+
+  return (
+    <div style={{
+      position: 'relative',
+      height: '100vh',
+      width: '100%',
+      scrollSnapAlign: 'start',
+      background: '#000',
+    }}>
+      <video
+        ref={videoRef}
+        src={post.video_url}
+        loop
+        playsInline
+        style={{
+          width: '100%',
+          height: '100%',
+          objectFit: 'contain',
+        }}
+      />
+
+      <div style={{
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        padding: '20px',
+        background: 'linear-gradient(to top, rgba(0,0,0,0.8) 0%, transparent 100%)',
+      }}>
+        <Link
+          href={`/u/${post.profiles.username}`}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+            marginBottom: 12,
+            textDecoration: 'none',
+            color: 'white',
+          }}
+        >
+          <div style={{
+            width: 40,
+            height: 40,
+            borderRadius: '50%',
+            background: post.profiles.avatar_url
+              ? `url(${post.profiles.avatar_url}) center/cover`
+              : 'linear-gradient(135deg, rgba(212,175,55,0.3) 0%, rgba(212,175,55,0.1) 100%)',
+            border: '2px solid white',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: 16,
+            fontWeight: 700,
+          }}>
+            {!post.profiles.avatar_url && post.profiles.username.slice(0, 2).toUpperCase()}
+          </div>
+          <div>
+            <div style={{ fontWeight: 600, fontSize: 15 }}>
+              {post.profiles.display_name || post.profiles.username}
+            </div>
+            <div style={{ fontSize: 12, opacity: 0.8 }}>
+              @{post.profiles.username}
+            </div>
+          </div>
+        </Link>
+
+        {post.caption && (
+          <div style={{
+            fontSize: 14,
+            lineHeight: 1.4,
+            marginBottom: 8,
+            color: 'white',
+          }}>
+            {post.caption}
+          </div>
+        )}
+
+        {post.hashtags && post.hashtags.length > 0 && (
+          <div style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: 8,
+            marginBottom: 12,
+          }}>
+            {post.hashtags.map((tag) => (
+              <span
+                key={tag}
+                style={{
+                  fontSize: 13,
+                  color: 'rgba(212,175,55,0.9)',
+                  fontWeight: 500,
+                }}
+              >
+                {tag}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div style={{
+        position: 'absolute',
+        right: 16,
+        bottom: 100,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 24,
+      }}>
+        <button style={{
+          background: 'rgba(0,0,0,0.5)',
+          border: '2px solid white',
+          borderRadius: '50%',
+          width: 56,
+          height: 56,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: 24,
+          cursor: 'pointer',
+          flexDirection: 'column',
+        }}>
+          <span>❤️</span>
+          <span style={{ fontSize: 12, fontWeight: 600, marginTop: 4 }}>
+            {post.like_count}
+          </span>
+        </button>
+
+        <button style={{
+          background: 'rgba(0,0,0,0.5)',
+          border: '2px solid white',
+          borderRadius: '50%',
+          width: 56,
+          height: 56,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: 24,
+          cursor: 'pointer',
+          flexDirection: 'column',
+        }}>
+          <span>💬</span>
+          <span style={{ fontSize: 12, fontWeight: 600, marginTop: 4 }}>
+            {post.comment_count}
+          </span>
+        </button>
+
+        <button style={{
+          background: 'rgba(0,0,0,0.5)',
+          border: '2px solid white',
+          borderRadius: '50%',
+          width: 56,
+          height: 56,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: 24,
+          cursor: 'pointer',
+          flexDirection: 'column',
+        }}>
+          <span>↗️</span>
+          <span style={{ fontSize: 12, fontWeight: 600, marginTop: 4 }}>
+            {post.share_count}
+          </span>
+        </button>
+      </div>
+
+      <Link
+        href="/upload"
+        style={{
+          position: 'absolute',
+          top: 20,
+          right: 20,
+          background: 'rgba(212,175,55,0.8)',
+          backdropFilter: 'blur(10px)',
+          border: '2px solid rgba(255,255,255,0.3)',
+          borderRadius: 30,
+          padding: '10px 20px',
+          color: 'white',
+          textDecoration: 'none',
+          fontSize: 14,
+          fontWeight: 600,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+        }}
+      >
+        <span style={{ fontSize: 18 }}>+</span>
+        Upload
+      </Link>
+    </div>
+  );
+}
+
 export default function Home() {
-  const [liveSessions, setLiveSessions] = useState<LiveSession[]>([]);
+  const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [page, setPage] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const containerRef = useRef<HTMLDivElement>(null);
 
-  const fetchLiveSessions = async () => {
+  const POSTS_PER_PAGE = 5;
+
+  const fetchPosts = async (pageNum: number) => {
+    setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('live_sessions')
-        .select('*')
-        .eq('is_live', true)
-        .order('started_at', { ascending: false });
+      const from = pageNum * POSTS_PER_PAGE;
+      const to = from + POSTS_PER_PAGE - 1;
 
-      if (error) {
-        console.error('Error fetching live sessions:', error);
-      } else {
-        setLiveSessions(data || []);
+      const { data, error: fetchError } = await supabase
+        .from('posts')
+        .select(`
+          *,
+          profiles (
+            id,
+            username,
+            display_name,
+            avatar_url
+          )
+        `)
+        .order('created_at', { ascending: false })
+        .range(from, to);
+
+      if (fetchError) {
+        throw fetchError;
       }
-    } catch (err) {
-      console.error('Unexpected error fetching live sessions:', err);
+
+      if (data && data.length > 0) {
+        setPosts((prev) => pageNum === 0 ? data : [...prev, ...data]);
+        setHasMore(data.length === POSTS_PER_PAGE);
+      } else {
+        setHasMore(false);
+      }
+    } catch (err: any) {
+      console.error('Error fetching posts:', err);
+      setError(err.message || 'Failed to load posts');
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchLiveSessions();
-
-    // Subscribe to realtime changes on live_sessions table
-    const channel = supabase
-      .channel('live_sessions_changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'live_sessions',
-        },
-        (payload) => {
-          console.log('Live sessions change detected:', payload);
-          fetchLiveSessions();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    fetchPosts(0);
   }, []);
 
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const handleScroll = () => {
+      const scrollTop = container.scrollTop;
+      const scrollHeight = container.scrollHeight;
+      const clientHeight = container.clientHeight;
+
+      const index = Math.round(scrollTop / clientHeight);
+      setCurrentIndex(index);
+
+      if (scrollTop + clientHeight >= scrollHeight - 100 && hasMore && !loading) {
+        const nextPage = page + 1;
+        setPage(nextPage);
+        fetchPosts(nextPage);
+      }
+    };
+
+    container.addEventListener('scroll', handleScroll);
+    return () => container.removeEventListener('scroll', handleScroll);
+  }, [page, hasMore, loading]);
+
+  if (loading && posts.length === 0) {
+    return (
+      <div style={{
+        height: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: '#000',
+        color: 'white',
+      }}>
+        <div>Loading...</div>
+      </div>
+    );
+  }
+
+  if (error && posts.length === 0) {
+    return (
+      <div style={{
+        height: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: '#000',
+        color: 'white',
+        padding: 20,
+      }}>
+        <div style={{ fontSize: 48, marginBottom: 20 }}>😕</div>
+        <div style={{ fontSize: 18, marginBottom: 20 }}>Failed to load posts</div>
+        <Link
+          href="/upload"
+          style={{
+            background: 'rgba(212,175,55,0.8)',
+            border: '2px solid rgba(255,255,255,0.3)',
+            borderRadius: 8,
+            padding: '12px 24px',
+            color: 'white',
+            textDecoration: 'none',
+            fontSize: 16,
+            fontWeight: 600,
+          }}
+        >
+          Upload a video
+        </Link>
+      </div>
+    );
+  }
+
+  if (posts.length === 0) {
+    return (
+      <div style={{
+        height: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: '#000',
+        color: 'white',
+        padding: 20,
+      }}>
+        <div style={{ fontSize: 64, marginBottom: 20 }}>📹</div>
+        <div style={{ fontSize: 24, marginBottom: 8, fontWeight: 600 }}>Welcome to RollCall</div>
+        <div style={{ fontSize: 16, marginBottom: 30, opacity: 0.8 }}>No posts yet. Be the first!</div>
+        <Link
+          href="/upload"
+          style={{
+            background: 'linear-gradient(135deg, rgba(212,175,55,0.8) 0%, rgba(212,175,55,0.6) 100%)',
+            border: '2px solid rgba(255,255,255,0.3)',
+            borderRadius: 8,
+            padding: '14px 28px',
+            color: 'white',
+            textDecoration: 'none',
+            fontSize: 16,
+            fontWeight: 600,
+          }}
+        >
+          Upload your first video
+        </Link>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-8">
-      <main className="flex flex-col gap-8 items-center max-w-2xl w-full">
-        <h1 className="text-4xl font-bold text-center">Welcome to ROLE OUT</h1>
-        <p className="text-xl text-center text-gray-600 dark:text-gray-400">
-          A video social platform with transparent moderation
-        </p>
+    <div
+      ref={containerRef}
+      style={{
+        height: '100vh',
+        overflowY: 'scroll',
+        scrollSnapType: 'y mandatory',
+        scrollBehavior: 'smooth',
+      }}
+    >
+      {posts.map((post, index) => (
+        <VideoPost
+          key={post.id}
+          post={post}
+          isVisible={index === currentIndex}
+        />
+      ))}
 
-        {/* Live Now Section */}
-        {!loading && liveSessions.length > 0 && (
-          <div style={{
-            width: '100%',
-            background: 'rgba(255,255,255,0.05)',
-            border: '1px solid rgba(255,255,255,0.1)',
-            borderRadius: 12,
-            padding: 20,
-            marginTop: 20,
-          }}>
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              marginBottom: 16,
-            }}>
-              <div style={{
-                width: 12,
-                height: 12,
-                borderRadius: '50%',
-                background: '#ff0000',
-                animation: 'pulse 2s infinite',
-              }} />
-              <h2 style={{
-                fontSize: 20,
-                fontWeight: 700,
-                margin: 0,
-              }}>
-                Live Now
-              </h2>
-            </div>
-            
-            <div style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 12,
-            }}>
-              {liveSessions.map((session) => (
-                <div
-                  key={session.id}
-                  style={{
-                    background: 'rgba(255,255,255,0.05)',
-                    border: '1px solid rgba(255,255,255,0.15)',
-                    borderRadius: 8,
-                    padding: 12,
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                  }}
-                >
-                  <div>
-                    <div style={{
-                      fontSize: 16,
-                      fontWeight: 600,
-                      marginBottom: 4,
-                    }}>
-                      {session.title}
-                    </div>
-                    <div style={{
-                      fontSize: 12,
-                      color: 'rgba(255,255,255,0.6)',
-                    }}>
-                      Started {formatRelativeTime(session.started_at)} • {session.viewers} {session.viewers === 1 ? 'viewer' : 'viewers'}
-                    </div>
-                  </div>
-                  <Link
-                    href={`/live/${session.id}`}
-                    className="nav-btn"
-                    style={{
-                      padding: '8px 16px',
-                      fontSize: 14,
-                      textDecoration: 'none',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    View →
-                  </Link>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full mt-8">
-          <section
-            className="grid"
-            style={{
-              display: "grid",
-              gap: "16px",
-              gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
-              padding: "10px 0 60px",
-            }}
-          >
-            <Link href="/feed" className="card">
-              <div className="card-icon">📰</div>
-              <div>
-                <div className="card-title">Feed</div>
-                <div className="card-sub">Browse video posts</div>
-              </div>
-            </Link>
-
-            <Link href="/upload" className="card">
-              <div className="card-icon">📤</div>
-              <div>
-                <div className="card-title">Upload</div>
-                <div className="card-sub">Share a video (≤60 s)</div>
-              </div>
-            </Link>
-
-            <Link href="/profile" className="card">
-              <div className="card-icon">👤</div>
-              <div>
-                <div className="card-title">Profile</div>
-                <div className="card-sub">View your profile</div>
-              </div>
-            </Link>
-
-            <Link href="/moderation" className="card">
-              <div className="card-icon">🛡️</div>
-              <div>
-                <div className="card-title">Moderation</div>
-                <div className="card-sub">Transparency Panel (FA³)</div>
-              </div>
-            </Link>
-
-            <Link href="/wallet" className="card">
-              <div className="card-icon">💰</div>
-              <div>
-                <div className="card-title">Wallet</div>
-                <div className="card-sub">Placeholder (FA³)</div>
-              </div>
-            </Link>
-
-            <Link href="/metrics" className="card">
-              <div className="card-icon">📊</div>
-              <div>
-                <div className="card-title">Metrics</div>
-                <div className="card-sub">Analytics (FA³)</div>
-              </div>
-            </Link>
-          </section>
+      {hasMore && (
+        <div style={{
+          height: 100,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: '#000',
+          color: 'white',
+        }}>
+          Loading more...
         </div>
-      </main>
-
-      <style jsx global>{`
-        @keyframes pulse {
-          0%, 100% {
-            opacity: 1;
-          }
-          50% {
-            opacity: 0.5;
-          }
-        }
-      `}</style>
+      )}
     </div>
   );
 }

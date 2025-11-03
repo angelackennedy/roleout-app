@@ -1,564 +1,506 @@
-"use client";
+'use client';
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { MODE } from "@/lib/config";
-import { initLocalDB, savePost } from "@/lib/localdb";
-import { useAuth } from "@/lib/auth-context";
-import { FFmpeg } from "@ffmpeg/ffmpeg";
-import { fetchFile } from "@ffmpeg/util";
+import { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
+import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/lib/auth-context';
+import Link from 'next/link';
 
-let supabase: any = null;
-if (MODE === "supabase") {
-  const supabaseModule = require("@/lib/supabase");
-  supabase = supabaseModule.supabase;
+function extractHashtags(text: string): string[] {
+  const hashtagRegex = /#[\w]+/g;
+  const matches = text.match(hashtagRegex);
+  if (!matches) return [];
+  return matches.map(tag => tag.toLowerCase());
 }
 
-function canBrowserPlay(file: File): boolean {
-  if (!file.type.startsWith("video/")) return true;
-  
-  const video = document.createElement("video");
-  const canPlay = video.canPlayType(file.type);
-  return canPlay === "probably" || canPlay === "maybe";
-}
+async function captureCoverImage(videoFile: File): Promise<Blob | null> {
+  return new Promise((resolve) => {
+    const video = document.createElement('video');
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
 
-async function convertToMp4IfNeeded(
-  file: File,
-  onProgress?: (p: number) => void
-): Promise<File> {
-  const ffmpeg = new FFmpeg();
-  
-  await ffmpeg.load({
-    coreURL: "https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.js",
+    video.addEventListener('loadedmetadata', () => {
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+    });
+
+    video.addEventListener('seeked', () => {
+      if (ctx) {
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob((blob) => {
+          URL.revokeObjectURL(video.src);
+          resolve(blob);
+        }, 'image/jpeg', 0.8);
+      } else {
+        resolve(null);
+      }
+    });
+
+    video.addEventListener('error', () => {
+      URL.revokeObjectURL(video.src);
+      resolve(null);
+    });
+
+    video.src = URL.createObjectURL(videoFile);
+    video.currentTime = 1;
   });
-
-  ffmpeg.on("progress", ({ progress }) => {
-    onProgress?.(Math.round(progress * 100));
-  });
-
-  const inputName = "input." + (file.name.split(".").pop() || "mov");
-  const outputName = "output.mp4";
-
-  await ffmpeg.writeFile(inputName, await fetchFile(file));
-
-  await ffmpeg.exec([
-    "-i",
-    inputName,
-    "-c:v",
-    "libx264",
-    "-preset",
-    "medium",
-    "-crf",
-    "23",
-    "-c:a",
-    "aac",
-    "-b:a",
-    "128k",
-    "-movflags",
-    "+faststart",
-    outputName,
-  ]);
-
-  const data = await ffmpeg.readFile(outputName) as Uint8Array;
-  // @ts-expect-error - Uint8Array type mismatch between ffmpeg.wasm and DOM API
-  const blob = new Blob([data], { type: "video/mp4" });
-  
-  const originalName = file.name.replace(/\.[^.]+$/, "");
-  return new File([blob], `${originalName}.mp4`, { type: "video/mp4" });
 }
 
 export default function UploadPage() {
-  const [file, setFile] = useState<File | null>(null);
-  const [safeFile, setSafeFile] = useState<File | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string>("");
-  const [caption, setCaption] = useState("");
-  const [uploading, setUploading] = useState(false);
-  const [converting, setConverting] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [convertProgress, setConvertProgress] = useState(0);
-  const [error, setError] = useState("");
-  const [uploadSuccess, setUploadSuccess] = useState(false);
-  const [formatNote, setFormatNote] = useState("");
-  const [testResult, setTestResult] = useState<string>("");
-  const [testing, setTesting] = useState(false);
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const router = useRouter();
+  const [file, setFile] = useState<File | null>(null);
+  const [preview, setPreview] = useState<string>('');
+  const [caption, setCaption] = useState('');
+  const [uploading, setUploading] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+  const [coverBlob, setCoverBlob] = useState<Blob | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const dropZoneRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (MODE === "supabase" && !user) {
-      router.push("/auth/login");
+    if (!authLoading && !user) {
+      router.push('/');
     }
-  }, [user, router]);
+  }, [user, authLoading, router]);
 
-  const resetForm = () => {
-    setFile(null);
-    setSafeFile(null);
-    if (previewUrl) {
-      URL.revokeObjectURL(previewUrl);
+  const handleFileSelect = async (selectedFile: File) => {
+    if (!selectedFile.type.startsWith('video/')) {
+      setError('Please select a video file');
+      return;
     }
-    setPreviewUrl("");
-    setCaption("");
-    setProgress(0);
-    setConvertProgress(0);
-    setError("");
-    setFormatNote("");
-    setTestResult("");
-  };
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = e.target.files?.[0];
-    if (!selectedFile) return;
-
-    if (!selectedFile.type.startsWith("video/") && !selectedFile.type.startsWith("image/")) {
-      setError("Please select a valid video or image file");
+    if (selectedFile.size > 100 * 1024 * 1024) {
+      setError('Video must be less than 100MB');
       return;
     }
 
     setFile(selectedFile);
-    setPreviewUrl(URL.createObjectURL(selectedFile));
-    setError("");
-    setUploadSuccess(false);
-    setFormatNote("");
-    setConvertProgress(0);
+    setPreview(URL.createObjectURL(selectedFile));
+    setError(null);
+    setSuccess(false);
 
-    if (selectedFile.type.startsWith("image/")) {
-      setSafeFile(selectedFile);
-      return;
-    }
+    const cover = await captureCoverImage(selectedFile);
+    setCoverBlob(cover);
+  };
 
-    if (canBrowserPlay(selectedFile)) {
-      setSafeFile(selectedFile);
-      return;
-    }
-
-    try {
-      setConverting(true);
-      setFormatNote("Converting to web-safe MP4…");
-      
-      const converted = await convertToMp4IfNeeded(
-        selectedFile,
-        setConvertProgress
-      );
-
-      setSafeFile(converted);
-      
-      if (previewUrl) {
-        URL.revokeObjectURL(previewUrl);
-      }
-      setPreviewUrl(URL.createObjectURL(converted));
-      
-      setFormatNote("");
-      setConvertProgress(0);
-    } catch (err: any) {
-      console.error("Conversion error:", err);
-      setError(`Conversion failed: ${err.message || "Unknown error"}`);
-      setFormatNote("");
-      setSafeFile(null);
-    } finally {
-      setConverting(false);
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = e.target.files?.[0];
+    if (selectedFile) {
+      handleFileSelect(selectedFile);
     }
   };
 
-  const uploadWithProgress = async (
-    fileName: string,
-    file: File
-  ): Promise<void> => {
-    return new Promise((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-      const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const droppedFile = e.dataTransfer.files?.[0];
+    if (droppedFile) {
+      handleFileSelect(droppedFile);
+    }
+  };
 
-      xhr.upload.addEventListener("progress", (e) => {
-        if (e.lengthComputable) {
-          const percentage = Math.round((e.loaded / e.total) * 100);
-          setProgress(percentage);
-        }
-      });
-
-      xhr.addEventListener("load", () => {
-        if (xhr.status >= 200 && xhr.status < 300) {
-          resolve();
-        } else {
-          let errorMsg = xhr.statusText || "Upload failed";
-          try {
-            const errorResponse = JSON.parse(xhr.responseText);
-            errorMsg = errorResponse.message || errorResponse.error || errorMsg;
-          } catch (e) {
-            if (xhr.responseText) {
-              errorMsg = xhr.responseText;
-            }
-          }
-          console.error("Upload XHR error:", {
-            status: xhr.status,
-            statusText: xhr.statusText,
-            responseText: xhr.responseText,
-            response: xhr.response,
-          });
-          reject(new Error(errorMsg));
-        }
-      });
-
-      xhr.addEventListener("error", () => {
-        console.error("Upload XHR network error:", {
-          status: xhr.status,
-          statusText: xhr.statusText,
-          responseText: xhr.responseText,
-        });
-        reject(new Error("Network error occurred"));
-      });
-
-      xhr.open(
-        "POST",
-        `${supabaseUrl}/storage/v1/object/media/${fileName}`
-      );
-      xhr.setRequestHeader("Authorization", `Bearer ${supabaseKey}`);
-      xhr.setRequestHeader("Content-Type", file.type);
-      xhr.setRequestHeader("x-upsert", "true");
-
-      xhr.send(file);
-    });
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
   };
 
   const handleUpload = async () => {
-    if (MODE === "supabase" && !user) {
-      setError("You must be signed in to upload.");
-      return;
-    }
-    if (!safeFile) {
-      setError("Please select a file first.");
-      return;
-    }
+    if (!user || !file) return;
 
     setUploading(true);
     setProgress(0);
-    setError("");
-    setUploadSuccess(false);
+    setError(null);
 
     try {
-      if (MODE === "local") {
-        await initLocalDB();
-        
-        setProgress(50);
-        await savePost(safeFile, caption);
-        
-        setProgress(100);
-        setUploadSuccess(true);
+      const fileExt = file.name.split('.').pop();
+      const timestamp = Date.now();
+      const videoPath = `${user.id}/${timestamp}.${fileExt}`;
+      
+      setProgress(10);
 
-        setTimeout(() => {
-          resetForm();
-          setUploadSuccess(false);
-          router.push("/feed");
-        }, 1500);
-      } else if (MODE === "supabase") {
-        const fileExt = safeFile.name.split(".").pop();
-        const isImage = safeFile.type.startsWith("image/");
-        
-        const folder = isImage ? "images" : "videos";
-        const fileName = `${folder}/${user!.id}/${Date.now()}.${fileExt}`;
-
-        await uploadWithProgress(fileName, safeFile);
-
-        const { data } = supabase.storage.from("media").getPublicUrl(fileName);
-        const publicUrl = data.publicUrl;
-
-        const { error: dbError } = await supabase.from("posts").insert({
-          user_id: user!.id,
-          video_url: publicUrl,
-          caption: caption,
-          like_count: 0,
-          comment_count: 0,
+      const { data: videoData, error: videoError } = await supabase.storage
+        .from('posts')
+        .upload(videoPath, file, {
+          cacheControl: '3600',
+          upsert: false,
         });
 
-        if (dbError) {
-          console.error("Database insert error:", dbError);
-          setError(dbError.message);
-          setProgress(0);
-          setUploadSuccess(false);
-          return;
-        }
-
-        setUploadSuccess(true);
-        setProgress(100);
-
-        setTimeout(() => {
-          resetForm();
-          setUploadSuccess(false);
-          router.push("/feed");
-        }, 1500);
+      if (videoError) {
+        throw new Error(`Video upload failed: ${videoError.message}`);
       }
-    } catch (e: any) {
-      console.error("Upload error:", e);
-      setError(e.message || "Upload failed");
+
+      setProgress(50);
+
+      const { data: videoUrlData } = supabase.storage
+        .from('posts')
+        .getPublicUrl(videoPath);
+
+      const videoUrl = videoUrlData.publicUrl;
+      let coverUrl = null;
+
+      if (coverBlob) {
+        const coverPath = `${user.id}/${timestamp}-cover.jpg`;
+        const { data: coverData, error: coverError } = await supabase.storage
+          .from('posts')
+          .upload(coverPath, coverBlob, {
+            contentType: 'image/jpeg',
+            cacheControl: '3600',
+            upsert: false,
+          });
+
+        if (!coverError) {
+          const { data: coverUrlData } = supabase.storage
+            .from('posts')
+            .getPublicUrl(coverPath);
+          coverUrl = coverUrlData.publicUrl;
+        }
+      }
+
+      setProgress(70);
+
+      const hashtags = extractHashtags(caption);
+
+      const { error: dbError } = await supabase
+        .from('posts')
+        .insert({
+          user_id: user.id,
+          video_url: videoUrl,
+          cover_url: coverUrl,
+          caption: caption.trim() || null,
+          hashtags: hashtags.length > 0 ? hashtags : null,
+        });
+
+      if (dbError) {
+        throw new Error(`Database error: ${dbError.message}`);
+      }
+
+      setProgress(100);
+      setSuccess(true);
+
+      setTimeout(() => {
+        router.push('/');
+      }, 1500);
+    } catch (err: any) {
+      console.error('Upload error:', err);
+      setError(err.message || 'Upload failed');
       setProgress(0);
-      setUploadSuccess(false);
     } finally {
       setUploading(false);
     }
   };
 
-  const testStorageAccess = async () => {
-    if (MODE === "local") {
-      setTestResult("✅ Local mode: Using IndexedDB storage");
-      return;
+  const resetForm = () => {
+    setFile(null);
+    if (preview) {
+      URL.revokeObjectURL(preview);
     }
-
-    setTesting(true);
-    setTestResult("");
-    try {
-      const { data, error } = await supabase.storage.from("media").list();
-      
-      if (error) {
-        console.error("Storage test error:", error);
-        setTestResult(`❌ Error: ${error.message}`);
-      } else {
-        console.log("Storage test success:", data);
-        setTestResult(`✅ Success! Found ${data?.length || 0} items in "media" bucket`);
-      }
-    } catch (e: any) {
-      console.error("Storage test exception:", e);
-      setTestResult(`❌ Exception: ${e.message}`);
-    } finally {
-      setTesting(false);
-    }
+    setPreview('');
+    setCaption('');
+    setProgress(0);
+    setError(null);
+    setSuccess(false);
+    setCoverBlob(null);
   };
 
-  if (MODE === "supabase" && !user) return null;
+  if (authLoading) {
+    return (
+      <div style={{
+        minHeight: '100vh',
+        background: 'radial-gradient(ellipse at center, #1a1a1a 0%, #000 70%)',
+        color: 'white',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}>
+        <div style={{ fontSize: 18 }}>Loading...</div>
+      </div>
+    );
+  }
 
-  const isVideo = safeFile?.type.startsWith("video/");
-  const isImage = safeFile?.type.startsWith("image/");
+  if (!user) {
+    return null;
+  }
+
+  const hashtags = extractHashtags(caption);
 
   return (
-    <main className="container">
-      <section className="hero" style={{ paddingBottom: 20 }}>
-        <h1>Upload</h1>
-        <p>Share a video or image (max 60s for video)</p>
-        {MODE === "local" && (
-          <p style={{ fontSize: 14, color: "var(--accent-gold)", marginTop: 8 }}>
-            📦 Local Mode: Data stored in browser (IndexedDB)
-          </p>
+    <div style={{
+      minHeight: '100vh',
+      background: 'radial-gradient(ellipse at center, #1a1a1a 0%, #000 70%)',
+      color: 'white',
+      padding: '40px 20px',
+    }}>
+      <div style={{
+        maxWidth: 700,
+        margin: '0 auto',
+      }}>
+        <div style={{ marginBottom: 30, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Link href="/" style={{
+            color: 'rgba(212,175,55,0.8)',
+            fontSize: 14,
+            textDecoration: 'none',
+            borderBottom: '1px solid rgba(212,175,55,0.3)',
+          }}>
+            ← Back to Feed
+          </Link>
+        </div>
+
+        <h1 style={{
+          fontSize: 32,
+          fontWeight: 700,
+          marginBottom: 10,
+          background: 'linear-gradient(135deg, #fff 0%, rgba(212,175,55,0.8) 100%)',
+          WebkitBackgroundClip: 'text',
+          WebkitTextFillColor: 'transparent',
+          backgroundClip: 'text',
+        }}>
+          Upload Video
+        </h1>
+
+        <p style={{
+          color: 'rgba(255,255,255,0.6)',
+          marginBottom: 30,
+          fontSize: 14,
+        }}>
+          Share your moment with the world
+        </p>
+
+        {error && (
+          <div style={{
+            background: 'rgba(255,0,0,0.1)',
+            border: '1px solid rgba(255,0,0,0.3)',
+            borderRadius: 8,
+            padding: 12,
+            marginBottom: 20,
+            color: '#ff6b6b',
+            fontSize: 14,
+          }}>
+            {error}
+          </div>
         )}
-      </section>
 
-      <div className="card" style={{ maxWidth: 600, margin: "0 auto" }}>
-        <div style={{ display: "grid", gap: 20 }}>
-          <div>
-            <label style={{ display: "block", marginBottom: 8, fontWeight: 500 }}>
-              Select File
-            </label>
-            <input
-              type="file"
-              accept="video/*,image/*"
-              onChange={handleFileChange}
-              className="nav-btn"
-              style={{ width: "100%" }}
-              disabled={uploading || converting}
-            />
+        {success && (
+          <div style={{
+            background: 'rgba(0,255,0,0.1)',
+            border: '1px solid rgba(0,255,0,0.3)',
+            borderRadius: 8,
+            padding: 12,
+            marginBottom: 20,
+            color: '#51cf66',
+            fontSize: 14,
+          }}>
+            ✅ Upload successful! Redirecting...
           </div>
+        )}
 
-          {converting && formatNote && (
+        <div style={{
+          background: 'rgba(255,255,255,0.05)',
+          border: '1px solid rgba(255,255,255,0.1)',
+          borderRadius: 12,
+          padding: 30,
+          marginBottom: 20,
+        }}>
+          {!file ? (
             <div
+              ref={dropZoneRef}
+              onDrop={handleDrop}
+              onDragOver={handleDragOver}
+              onClick={() => fileInputRef.current?.click()}
               style={{
-                padding: 12,
-                borderRadius: 6,
-                backgroundColor: "rgba(197,164,109,0.1)",
-                border: "1px solid rgba(197,164,109,0.3)",
-                color: "var(--accent-gold)",
+                border: '2px dashed rgba(212,175,55,0.5)',
+                borderRadius: 12,
+                padding: 60,
+                textAlign: 'center',
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+                background: 'rgba(212,175,55,0.05)',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'rgba(212,175,55,0.1)';
+                e.currentTarget.style.borderColor = 'rgba(212,175,55,0.7)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'rgba(212,175,55,0.05)';
+                e.currentTarget.style.borderColor = 'rgba(212,175,55,0.5)';
               }}
             >
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  marginBottom: 8,
-                  fontSize: 14,
-                }}
-              >
-                <span>{formatNote}</span>
-                <span>{convertProgress}%</span>
+              <div style={{ fontSize: 48, marginBottom: 16 }}>📹</div>
+              <div style={{ fontSize: 18, fontWeight: 600, marginBottom: 8 }}>
+                Click or drag to upload
               </div>
-              <div
-                style={{
-                  width: "100%",
-                  height: 6,
-                  backgroundColor: "rgba(255,255,255,0.1)",
-                  borderRadius: 3,
-                  overflow: "hidden",
-                }}
-              >
-                <div
-                  style={{
-                    width: `${convertProgress}%`,
-                    height: "100%",
-                    backgroundColor: "var(--accent-gold)",
-                    transition: "width 0.3s ease",
-                    borderRadius: 3,
-                  }}
-                />
+              <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.6)' }}>
+                MP4, MOV, WebM • Max 100MB
               </div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="video/*"
+                onChange={handleFileChange}
+                style={{ display: 'none' }}
+              />
             </div>
-          )}
-
-          {previewUrl && !converting && (
+          ) : (
             <div>
-              <label style={{ display: "block", marginBottom: 8, fontWeight: 500 }}>
-                Preview
-              </label>
-              {isVideo && (
+              <div style={{
+                position: 'relative',
+                marginBottom: 20,
+              }}>
                 <video
-                  src={previewUrl}
+                  src={preview}
                   controls
-                  style={{ width: "100%", borderRadius: 10, backgroundColor: "#000" }}
-                />
-              )}
-              {isImage && (
-                <img
-                  src={previewUrl}
-                  alt="Preview"
-                  style={{ width: "100%", borderRadius: 10 }}
-                />
-              )}
-            </div>
-          )}
-
-          <div>
-            <label style={{ display: "block", marginBottom: 8, fontWeight: 500 }}>
-              Caption (optional)
-            </label>
-            <textarea
-              value={caption}
-              onChange={(e) => setCaption(e.target.value)}
-              rows={3}
-              placeholder="Add a caption..."
-              disabled={uploading || converting}
-              style={{
-                width: "100%",
-                padding: 10,
-                borderRadius: 6,
-                border: "1px solid rgba(255,255,255,0.1)",
-                backgroundColor: "rgba(255,255,255,0.05)",
-                color: "inherit",
-                fontFamily: "inherit",
-                opacity: uploading || converting ? 0.6 : 1,
-              }}
-            />
-          </div>
-
-          {uploading && (
-            <div>
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  marginBottom: 8,
-                  fontSize: 14,
-                  color: uploadSuccess ? "var(--accent-gold)" : "rgba(255,255,255,0.7)",
-                }}
-              >
-                <span>
-                  {uploadSuccess ? "✅ Uploaded successfully" : "Uploading..."}
-                </span>
-                <span>{progress}%</span>
-              </div>
-              <div
-                style={{
-                  width: "100%",
-                  height: 8,
-                  backgroundColor: "rgba(255,255,255,0.1)",
-                  borderRadius: 4,
-                  overflow: "hidden",
-                }}
-              >
-                <div
                   style={{
-                    width: `${progress}%`,
-                    height: "100%",
-                    backgroundColor: "var(--accent-gold)",
-                    transition: "width 0.3s ease",
-                    borderRadius: 4,
-                    boxShadow: uploadSuccess
-                      ? "0 0 12px var(--accent-gold)"
-                      : "none",
+                    width: '100%',
+                    borderRadius: 8,
+                    background: '#000',
+                    maxHeight: 500,
                   }}
                 />
+                {!uploading && (
+                  <button
+                    onClick={resetForm}
+                    style={{
+                      position: 'absolute',
+                      top: 10,
+                      right: 10,
+                      background: 'rgba(0,0,0,0.8)',
+                      border: '1px solid rgba(255,255,255,0.3)',
+                      borderRadius: 6,
+                      padding: '8px 12px',
+                      color: 'white',
+                      fontSize: 12,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    ✕ Change Video
+                  </button>
+                )}
               </div>
+
+              <div style={{ marginBottom: 20 }}>
+                <label style={{
+                  display: 'block',
+                  fontSize: 14,
+                  fontWeight: 600,
+                  marginBottom: 8,
+                  color: 'rgba(255,255,255,0.9)',
+                }}>
+                  Caption
+                </label>
+                <textarea
+                  value={caption}
+                  onChange={(e) => setCaption(e.target.value)}
+                  placeholder="Add a caption... Use #hashtags"
+                  maxLength={300}
+                  rows={4}
+                  disabled={uploading}
+                  style={{
+                    width: '100%',
+                    padding: '10px 14px',
+                    background: 'rgba(0,0,0,0.3)',
+                    border: '1px solid rgba(255,255,255,0.2)',
+                    borderRadius: 6,
+                    color: 'white',
+                    fontSize: 14,
+                    outline: 'none',
+                    resize: 'vertical',
+                    fontFamily: 'inherit',
+                  }}
+                  onFocus={(e) => {
+                    e.currentTarget.style.borderColor = 'rgba(212,175,55,0.5)';
+                  }}
+                  onBlur={(e) => {
+                    e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)';
+                  }}
+                />
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  marginTop: 4,
+                  fontSize: 12,
+                  color: 'rgba(255,255,255,0.5)',
+                }}>
+                  <div>
+                    {hashtags.length > 0 && (
+                      <span>
+                        Tags: {hashtags.map(tag => tag).join(' ')}
+                      </span>
+                    )}
+                  </div>
+                  <div>{caption.length}/300</div>
+                </div>
+              </div>
+
+              {uploading && (
+                <div style={{
+                  marginBottom: 20,
+                  background: 'rgba(255,255,255,0.05)',
+                  borderRadius: 8,
+                  padding: 16,
+                }}>
+                  <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    marginBottom: 8,
+                    fontSize: 14,
+                  }}>
+                    <span>{success ? '✅ Upload complete!' : 'Uploading...'}</span>
+                    <span>{progress}%</span>
+                  </div>
+                  <div style={{
+                    width: '100%',
+                    height: 8,
+                    background: 'rgba(255,255,255,0.1)',
+                    borderRadius: 4,
+                    overflow: 'hidden',
+                  }}>
+                    <div style={{
+                      width: `${progress}%`,
+                      height: '100%',
+                      background: 'linear-gradient(90deg, rgba(212,175,55,0.6) 0%, rgba(212,175,55,0.8) 100%)',
+                      transition: 'width 0.3s ease',
+                    }} />
+                  </div>
+                </div>
+              )}
+
+              <button
+                onClick={handleUpload}
+                disabled={uploading || success}
+                style={{
+                  width: '100%',
+                  padding: '14px',
+                  background: uploading || success
+                    ? 'rgba(255,255,255,0.1)'
+                    : 'linear-gradient(135deg, rgba(212,175,55,0.6) 0%, rgba(212,175,55,0.4) 100%)',
+                  border: '1px solid rgba(212,175,55,0.5)',
+                  borderRadius: 6,
+                  color: 'white',
+                  fontSize: 16,
+                  fontWeight: 600,
+                  cursor: uploading || success ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.2s',
+                }}
+                onMouseEnter={(e) => {
+                  if (!uploading && !success) {
+                    e.currentTarget.style.background = 'linear-gradient(135deg, rgba(212,175,55,0.7) 0%, rgba(212,175,55,0.5) 100%)';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!uploading && !success) {
+                    e.currentTarget.style.background = 'linear-gradient(135deg, rgba(212,175,55,0.6) 0%, rgba(212,175,55,0.4) 100%)';
+                  }
+                }}
+              >
+                {uploading ? 'Uploading...' : success ? '✅ Posted!' : 'Post'}
+              </button>
             </div>
           )}
-
-          {error && (
-            <div
-              style={{
-                padding: 12,
-                borderRadius: 6,
-                backgroundColor: "rgba(255,0,0,0.1)",
-                color: "#ff6b6b",
-                border: "1px solid rgba(255,0,0,0.2)",
-                fontSize: 14,
-              }}
-            >
-              <strong>Error:</strong> {error}
-            </div>
-          )}
-
-          {testResult && (
-            <div
-              style={{
-                padding: 12,
-                borderRadius: 6,
-                backgroundColor: testResult.startsWith("✅") 
-                  ? "rgba(0,255,0,0.1)" 
-                  : "rgba(255,0,0,0.1)",
-                color: testResult.startsWith("✅") 
-                  ? "#6bff6b" 
-                  : "#ff6b6b",
-                border: testResult.startsWith("✅") 
-                  ? "1px solid rgba(0,255,0,0.2)" 
-                  : "1px solid rgba(255,0,0,0.2)",
-                fontSize: 14,
-              }}
-            >
-              <strong>Storage Test:</strong> {testResult}
-            </div>
-          )}
-
-          <div style={{ display: "flex", gap: 10 }}>
-            <button
-              onClick={handleUpload}
-              disabled={!safeFile || uploading || converting}
-              className="nav-btn"
-              style={{
-                flex: 1,
-                padding: "12px 20px",
-                opacity: !safeFile || uploading || converting ? 0.5 : 1,
-                cursor: !safeFile || uploading || converting ? "not-allowed" : "pointer",
-              }}
-            >
-              {uploadSuccess
-                ? "✅ Upload Complete"
-                : uploading
-                  ? `Uploading... ${progress}%`
-                  : converting
-                    ? "Converting..."
-                    : "Upload"}
-            </button>
-
-            <button
-              onClick={testStorageAccess}
-              disabled={testing}
-              className="nav-btn"
-              style={{
-                padding: "12px 20px",
-                opacity: testing ? 0.5 : 1,
-                cursor: testing ? "not-allowed" : "pointer",
-                backgroundColor: "rgba(197,164,109,0.15)",
-                border: "1px solid rgba(197,164,109,0.3)",
-              }}
-              title={MODE === "local" ? "Local IndexedDB storage" : "Test access to 'media' storage bucket"}
-            >
-              {testing ? "Testing..." : "🔍 Test Storage"}
-            </button>
-          </div>
         </div>
       </div>
-    </main>
+    </div>
   );
 }
