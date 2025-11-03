@@ -4,6 +4,24 @@
 RollCall is a video-based social platform focused on authenticity and transparent moderation. Built with Next.js 14, TypeScript, Supabase, and Tailwind CSS.
 
 ## Recent Changes
+- **2025-11-03**: Direct Messaging System
+  - Built 1-on-1 DM system with realtime chat
+  - Created conversations, conversation_members, and messages tables
+  - Inbox page showing conversation list with last messages
+  - DM thread pages with realtime message subscriptions
+  - Message button on profile pages with create-on-demand conversations
+  - Optimistic UI updates for instant message feedback
+  - Secure RLS policies (users can only add themselves to conversations)
+  - Idempotent conversation creation via `get_or_create_conversation` RPC
+
+- **2025-11-03**: Live Session Chat
+  - Updated live_chat schema with profiles foreign key reference
+  - Realtime chat on /live/[id] with 300ms rate limiting
+  - Fetches last 100 messages on mount
+  - Chat input disabled for unauthenticated users
+  - Auto-scroll to newest messages
+  - RLS policies: SELECT for all, INSERT only for authenticated users
+
 - **2025-11-03**: Client-Side Video Processing
   - Integrated ffmpeg.wasm for automatic video processing
   - Thumbnail extraction from first keyframe
