@@ -4,6 +4,8 @@ import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
 import { formatRelativeTime } from '@/lib/time-utils';
+import { useAuth } from '@/lib/auth-context';
+import { usePostLike } from '@/lib/hooks/usePostLike';
 
 type Profile = {
   id: string;
@@ -26,8 +28,13 @@ type Post = {
   profiles: Profile;
 };
 
-function VideoPost({ post, isVisible }: { post: Post; isVisible: boolean }) {
+function VideoPost({ post, isVisible, userId }: { post: Post; isVisible: boolean; userId: string | null }) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const { isLiked, likeCount, toggleLike, isLoading } = usePostLike({
+    postId: post.id,
+    initialLikeCount: post.like_count,
+    userId,
+  });
 
   useEffect(() => {
     const video = videoRef.current;
@@ -147,22 +154,39 @@ function VideoPost({ post, isVisible }: { post: Post; isVisible: boolean }) {
         flexDirection: 'column',
         gap: 24,
       }}>
-        <button style={{
-          background: 'rgba(0,0,0,0.5)',
-          border: '2px solid white',
-          borderRadius: '50%',
-          width: 56,
-          height: 56,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontSize: 24,
-          cursor: 'pointer',
-          flexDirection: 'column',
-        }}>
-          <span>❤️</span>
-          <span style={{ fontSize: 12, fontWeight: 600, marginTop: 4 }}>
-            {post.like_count}
+        <button 
+          onClick={toggleLike}
+          disabled={isLoading}
+          style={{
+            background: 'rgba(0,0,0,0.5)',
+            border: '2px solid white',
+            borderRadius: '50%',
+            width: 56,
+            height: 56,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: 24,
+            cursor: isLoading ? 'not-allowed' : 'pointer',
+            flexDirection: 'column',
+            opacity: isLoading ? 0.6 : 1,
+            transition: 'transform 0.2s',
+          }}
+          onMouseDown={(e) => {
+            if (!isLoading) {
+              (e.currentTarget as HTMLButtonElement).style.transform = 'scale(0.9)';
+            }
+          }}
+          onMouseUp={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.transform = 'scale(1)';
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.transform = 'scale(1)';
+          }}
+        >
+          <span>{isLiked ? '❤️' : '🤍'}</span>
+          <span style={{ fontSize: 12, fontWeight: 600, marginTop: 4, color: 'white' }}>
+            {likeCount}
           </span>
         </button>
 
@@ -233,6 +257,7 @@ function VideoPost({ post, isVisible }: { post: Post; isVisible: boolean }) {
 }
 
 export default function Home() {
+  const { user } = useAuth();
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -405,6 +430,7 @@ export default function Home() {
           key={post.id}
           post={post}
           isVisible={index === currentIndex}
+          userId={user?.id || null}
         />
       ))}
 
