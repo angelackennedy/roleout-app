@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useParams } from 'next/navigation';
+import { useAuth } from '@/lib/auth-context';
 import VideoPost from '@/components/VideoPost';
 
 type Post = {
@@ -22,6 +23,7 @@ type Post = {
 };
 
 export default function TagPage() {
+  const { user } = useAuth();
   const params = useParams();
   const tagName = params.name as string;
   const [posts, setPosts] = useState<Post[]>([]);
@@ -220,6 +222,7 @@ export default function TagPage() {
           <VideoPost
             post={post}
             isActive={index === currentIndex}
+            userId={user?.id || null}
           />
         </div>
       ))}
