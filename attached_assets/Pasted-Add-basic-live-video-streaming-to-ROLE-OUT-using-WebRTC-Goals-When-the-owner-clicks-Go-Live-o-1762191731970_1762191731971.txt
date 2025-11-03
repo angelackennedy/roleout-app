@@ -1,0 +1,46 @@
+Add basic live video streaming to ROLE OUT using WebRTC.
+
+Goals:
+- When the owner clicks “Go Live” on /test-supabase, start webcam (camera+mic) and publish the stream tied to that live_sessions row.
+- When anyone opens /live/[id], auto-play the live stream for that session.
+- Use Supabase Realtime for signaling (offer/answer/candidates) so viewers can connect to the broadcaster.
+- Keep everything in the current codebase, TypeScript, no breaking styles.
+
+Implementation details:
+1) Signaling:
+   - Create a realtime channel per session: channel name `webrtc:session:{id}`.
+   - Publisher (broadcaster) sends JSON messages: {type:'offer'|'candidate'|'end', sdp?, candidate?}.
+   - Viewer replies with {type:'answer', sdp} and its ICE candidates.
+   - Use supabase.channel().on('broadcast', ...) and .send({type:'broadcast', event:'signal', payload}) for messages.
+
+2) WebRTC setup:
+   - ICE config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] }.
+   - Publisher on /test-supabase after “Go Live”:
+       a) getUserMedia({video:true,audio:true}) → show in a <video muted playsInline>.
+       b) Create RTCPeerConnection, add tracks, createOffer, setLocalDescription, broadcast offer via channel.
+       c) Listen for 'answer' + ICE candidates from viewers and add to peer connection(s). Support multiple viewers by creating a new RTCPeerConnection per viewer id.
+       d) On “End Live”, stop tracks, close peer connections, broadcast {type:'end'}.
+   - Viewer on /live/[id]:
+       a) Create RTCPeerConnection, listen for remote tracks → attach to <video playsInline autoplay>.
+       b) On channel receive 'offer', setRemoteDescription, createAnswer, setLocalDescription, broadcast answer.
+       c) Exchange ICE candidates both ways.
+       d) If 'end' arrives or is_live=false via Realtime, show “Stream ended”.
+
+3) Pages:
+   - Update /test-supabase to show a preview video element for the broadcaster when live, with Start/Stop controls wired to the above.
+   - Create /live/[id].tsx (client component) that fetches the session, renders a <video>, joins the signaling channel, and plays the stream. If session is not live, show “Waiting for host…” and auto-switch to video when it goes live.
+   - Keep using lib/supabase.ts for the client. Use existing live_sessions row id as the channel key.
+
+4) Safety/cleanup:
+   - Handle permission errors (camera/mic denied) with clear UI messages.
+   - On unmount or End Live: close peer connections, leave channel, stop MediaStream tracks.
+   - Viewer count: increment viewers on mount, decrement on unmount (never below 0) using existing viewers column.
+   - Realtime hooks: if session is_live flips false, stop playback and show “Stream ended”.
+
+5) Testing checklist (show in README/test note):
+   - /login → sign in
+   - /test-supabase → Create New Session → Go Live → allow camera/mic
+   - Open a second browser tab or phone → /live/{that id} → should auto-play
+   - End Live → viewer page shows “Stream ended”, home Live Now list updates.
+
+6) Do not add global CSS. Keep code in small modules/components. Keep current styles intact.

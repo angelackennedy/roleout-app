@@ -3,13 +3,20 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth-context';
+import { useWebRTCBroadcaster } from '@/lib/hooks/useWebRTCBroadcaster';
 import Link from 'next/link';
 
 export default function TestSupabasePage() {
   const [status, setStatus] = useState<string>('');
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [isLive, setIsLive] = useState(false);
   const [loading, setLoading] = useState(false);
   const { user } = useAuth();
+
+  const { isStreaming, localVideoRef, startBroadcast, stopBroadcast } = useWebRTCBroadcaster({
+    sessionId: sessionId || '',
+    onError: (error) => setStatus(`❌ ${error}`),
+  });
 
   useEffect(() => {
     if (user) {
@@ -69,9 +76,13 @@ export default function TestSupabasePage() {
     }
 
     setLoading(true);
-    setStatus('Going live...');
+    setStatus('Starting camera and going live...');
 
     try {
+      // Start webcam and WebRTC broadcast
+      await startBroadcast();
+
+      // Update database
       const { data, error } = await supabase
         .from('live_sessions')
         .update({
@@ -85,13 +96,16 @@ export default function TestSupabasePage() {
       if (error) {
         console.error('Go live error:', error);
         setStatus(`❌ Error: ${error.message}`);
+        stopBroadcast();
       } else {
         console.log('Go live success:', data);
-        setStatus(`✅ Session ${sessionId} is now LIVE! 🔴`);
+        setIsLive(true);
+        setStatus(`✅ Session ${sessionId} is now LIVE with camera! 🔴`);
       }
     } catch (err: any) {
       console.error('Unexpected error:', err);
       setStatus(`❌ Unexpected error: ${err.message}`);
+      stopBroadcast();
     } finally {
       setLoading(false);
     }
@@ -112,6 +126,10 @@ export default function TestSupabasePage() {
     setStatus('Ending live session...');
 
     try {
+      // Stop WebRTC broadcast
+      stopBroadcast();
+
+      // Update database
       const { data, error } = await supabase
         .from('live_sessions')
         .update({
@@ -127,6 +145,7 @@ export default function TestSupabasePage() {
         setStatus(`❌ Error: ${error.message}`);
       } else {
         console.log('End live success:', data);
+        setIsLive(false);
         setStatus(`✅ Session ${sessionId} ended successfully`);
       }
     } catch (err: any) {
@@ -172,9 +191,13 @@ export default function TestSupabasePage() {
   const handleSignOut = async () => {
     setLoading(true);
     try {
+      if (isStreaming) {
+        stopBroadcast();
+      }
       await supabase.auth.signOut();
       setStatus('✅ Signed out successfully');
       setSessionId(null);
+      setIsLive(false);
     } catch (err: any) {
       setStatus(`❌ Error signing out: ${err.message}`);
     } finally {
@@ -190,7 +213,7 @@ export default function TestSupabasePage() {
       padding: '40px 20px',
     }}>
       <div style={{
-        maxWidth: 600,
+        maxWidth: 800,
         margin: '0 auto',
       }}>
         <h1 style={{
@@ -210,8 +233,60 @@ export default function TestSupabasePage() {
           marginBottom: 30,
           fontSize: 14,
         }}>
-          Test authenticated live session management
+          Test authenticated live session management with WebRTC
         </p>
+
+        {/* Video Preview Section */}
+        {isStreaming && (
+          <div style={{
+            background: 'rgba(255,255,255,0.05)',
+            border: '1px solid rgba(255,255,255,0.1)',
+            borderRadius: 12,
+            padding: 20,
+            marginBottom: 20,
+          }}>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              marginBottom: 12,
+            }}>
+              <div style={{
+                width: 12,
+                height: 12,
+                borderRadius: '50%',
+                background: '#ff0000',
+                animation: 'pulse 2s infinite',
+              }} />
+              <h2 style={{
+                fontSize: 18,
+                fontWeight: 600,
+                margin: 0,
+              }}>
+                Camera Preview (Broadcasting)
+              </h2>
+            </div>
+            <video
+              ref={localVideoRef}
+              autoPlay
+              muted
+              playsInline
+              style={{
+                width: '100%',
+                borderRadius: 8,
+                background: '#000',
+                aspectRatio: '16/9',
+              }}
+            />
+            <p style={{
+              marginTop: 10,
+              fontSize: 12,
+              color: 'rgba(255,255,255,0.6)',
+            }}>
+              Your camera feed is being broadcast to viewers at /live/{sessionId}
+            </p>
+          </div>
+        )}
 
         <div style={{
           background: 'rgba(255,255,255,0.05)',
@@ -326,36 +401,36 @@ export default function TestSupabasePage() {
 
           <button
             onClick={goLive}
-            disabled={loading || !sessionId || !user}
+            disabled={loading || !sessionId || !user || isStreaming}
             className="nav-btn"
             style={{
               width: '100%',
               padding: '14px 20px',
               fontSize: 16,
               fontWeight: 600,
-              opacity: loading || !sessionId || !user ? 0.5 : 1,
-              cursor: loading || !sessionId || !user ? 'not-allowed' : 'pointer',
+              opacity: loading || !sessionId || !user || isStreaming ? 0.5 : 1,
+              cursor: loading || !sessionId || !user || isStreaming ? 'not-allowed' : 'pointer',
               background: 'linear-gradient(135deg, #ff4444 0%, #cc0000 100%)',
             }}
           >
-            {loading ? '⏳ Working...' : '🔴 Go Live'}
+            {loading ? '⏳ Working...' : '🔴 Go Live (Start Camera)'}
           </button>
 
           <button
             onClick={endLive}
-            disabled={loading || !sessionId || !user}
+            disabled={loading || !sessionId || !user || !isStreaming}
             className="nav-btn"
             style={{
               width: '100%',
               padding: '14px 20px',
               fontSize: 16,
               fontWeight: 600,
-              opacity: loading || !sessionId || !user ? 0.5 : 1,
-              cursor: loading || !sessionId || !user ? 'not-allowed' : 'pointer',
+              opacity: loading || !sessionId || !user || !isStreaming ? 0.5 : 1,
+              cursor: loading || !sessionId || !user || !isStreaming ? 'not-allowed' : 'pointer',
               background: 'linear-gradient(135deg, #666 0%, #333 100%)',
             }}
           >
-            {loading ? '⏳ Working...' : '⏹️ End Live'}
+            {loading ? '⏳ Working...' : '⏹️ End Live (Stop Camera)'}
           </button>
 
           <button
@@ -413,15 +488,26 @@ export default function TestSupabasePage() {
           <ol style={{ margin: 0, paddingLeft: 20 }}>
             <li>Sign in at /login with your email (magic link)</li>
             <li>Click "Create New Session" to insert with your user_id (UUID)</li>
-            <li>Click "Go Live" to set is_live=true and update started_at</li>
-            <li>Click "End Live" to set is_live=false and set ended_at</li>
-            <li>Click "Fetch My Sessions" to see your entries in console</li>
+            <li>Click "Go Live" - allow camera/mic permissions</li>
+            <li>Open /live/{'{sessionId}'} in another tab to watch</li>
+            <li>Click "End Live" to stop streaming</li>
           </ol>
           <p style={{ marginTop: 10, marginBottom: 0 }}>
-            <strong>RLS Note:</strong> Make sure your Supabase RLS policies allow operations where auth.uid() = user_id
+            <strong>WebRTC Note:</strong> Uses Google STUN servers for peer-to-peer connection. Supabase Realtime handles signaling.
           </p>
         </div>
       </div>
+
+      <style jsx global>{`
+        @keyframes pulse {
+          0%, 100% {
+            opacity: 1;
+          }
+          50% {
+            opacity: 0.5;
+          }
+        }
+      `}</style>
     </div>
   );
 }
