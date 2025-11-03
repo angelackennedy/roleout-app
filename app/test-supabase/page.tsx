@@ -11,11 +11,24 @@ export default function TestSupabasePage() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [isLive, setIsLive] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [recordingUrl, setRecordingUrl] = useState<string | null>(null);
   const { user } = useAuth();
 
-  const { isStreaming, localVideoRef, startBroadcast, stopBroadcast } = useWebRTCBroadcaster({
+  const { 
+    isStreaming, 
+    isRecording, 
+    uploadProgress,
+    localVideoRef, 
+    startBroadcast, 
+    stopBroadcast 
+  } = useWebRTCBroadcaster({
     sessionId: sessionId || '',
+    userId: user?.id || null,
     onError: (error) => setStatus(`❌ ${error}`),
+    onRecordingComplete: (publicUrl) => {
+      setRecordingUrl(publicUrl);
+      setStatus(`✅ Replay saved! <a href="/live/${sessionId}" target="_blank">View Replay</a>`);
+    },
   });
 
   useEffect(() => {
@@ -265,6 +278,29 @@ export default function TestSupabasePage() {
               }}>
                 Camera Preview (Broadcasting)
               </h2>
+              {isRecording && (
+                <div style={{
+                  marginLeft: 'auto',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '4px 12px',
+                  background: 'rgba(255,0,0,0.2)',
+                  border: '1px solid rgba(255,0,0,0.5)',
+                  borderRadius: 6,
+                  fontSize: 12,
+                  fontWeight: 600,
+                }}>
+                  <div style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: '50%',
+                    background: '#ff0000',
+                    animation: 'pulse 1s infinite',
+                  }} />
+                  Recording...
+                </div>
+              )}
             </div>
             <video
               ref={localVideoRef}
@@ -278,12 +314,36 @@ export default function TestSupabasePage() {
                 aspectRatio: '16/9',
               }}
             />
+            {uploadProgress > 0 && uploadProgress < 100 && (
+              <div style={{
+                marginTop: 12,
+                background: 'rgba(255,255,255,0.1)',
+                borderRadius: 8,
+                overflow: 'hidden',
+                height: 24,
+              }}>
+                <div style={{
+                  width: `${uploadProgress}%`,
+                  height: '100%',
+                  background: 'linear-gradient(90deg, rgba(212,175,55,0.5) 0%, rgba(212,175,55,0.8) 100%)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: 11,
+                  fontWeight: 600,
+                  transition: 'width 0.3s ease',
+                }}>
+                  Uploading... {uploadProgress}%
+                </div>
+              </div>
+            )}
             <p style={{
               marginTop: 10,
               fontSize: 12,
               color: 'rgba(255,255,255,0.6)',
             }}>
               Your camera feed is being broadcast to viewers at /live/{sessionId}
+              {isRecording && ' • Recording in progress'}
             </p>
           </div>
         )}
