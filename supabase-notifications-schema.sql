@@ -27,11 +27,12 @@ CREATE POLICY "Users can view their own notifications"
   TO authenticated
   USING (auth.uid() = user_id);
 
--- Policy: Anyone can insert notifications (for triggers and server actions)
+-- Policy: Only authenticated users can insert notifications (for triggers)
+-- Triggers run as SECURITY DEFINER, so they execute with owner privileges
 CREATE POLICY "System can insert notifications"
   ON public.notifications
   FOR INSERT
-  TO public
+  TO authenticated
   WITH CHECK (true);
 
 -- Policy: Users can only update (mark as read) their own notifications
@@ -92,8 +93,11 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 CREATE OR REPLACE FUNCTION notify_follow()
 RETURNS TRIGGER AS $$
 BEGIN
-  INSERT INTO public.notifications (user_id, actor_id, type)
-  VALUES (NEW.following_id, NEW.follower_id, 'follow');
+  -- Only notify if follower is not following themselves (extra safety check)
+  IF NEW.follower_id != NEW.following_id THEN
+    INSERT INTO public.notifications (user_id, actor_id, type)
+    VALUES (NEW.following_id, NEW.follower_id, 'follow');
+  END IF;
   
   RETURN NEW;
 END;
