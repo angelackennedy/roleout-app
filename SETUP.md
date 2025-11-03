@@ -103,6 +103,20 @@ Creates search and discovery functions:
 
 **Powers the Search page and hashtag discovery!**
 
+### 10. Notifications System
+File: `supabase-notifications-schema.sql`
+
+Creates the complete notifications system:
+- `notifications` table with user_id, actor_id, type (like/comment/follow), post_id, read_at
+- RLS policies: Users can only view/update their own notifications
+- Indexes on user_id, created_at, and unread status
+- **Automatic triggers** that create notifications when:
+  - Someone likes your post (inserts into `post_likes`)
+  - Someone comments on your post (inserts into `post_comments`)
+  - Someone follows you (inserts into `follows`)
+
+**Real-time notifications with automatic triggers!** Bell icon shows unread count and updates instantly.
+
 ## Storage Buckets Summary
 
 After running all SQL files, you should have these buckets:
@@ -143,7 +157,11 @@ Once setup is complete, you can:
 8. **Comment on posts** - Click comment button to open drawer, add comments with realtime updates
 9. **Follow users** - Visit `/u/[username]` and click Follow/Unfollow button
 10. **View profiles** - See follower/following counts, bio, and join date
-11. **Live streaming** - Join sessions at `/live/[sessionId]` with WebRTC
+11. **Notifications** (`/notifications`) - Get notified when someone likes, comments, or follows you
+    - Bell icon in header shows unread count
+    - Real-time updates via Supabase subscriptions
+    - Automatic triggers create notifications instantly
+12. **Live streaming** - Join sessions at `/live/[sessionId]` with WebRTC
 
 ## Troubleshooting
 
