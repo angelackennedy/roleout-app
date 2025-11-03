@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { useTrendingHashtags } from '@/lib/use-trending-hashtags';
 import { Draft } from '@/lib/use-drafts';
 import { processVideo, ProcessingProgress } from '@/lib/video-processor';
+import SoundPicker from '@/components/SoundPicker';
 
 interface NewUploadTabProps {
   userId: string;
@@ -69,10 +70,12 @@ export function NewUploadTab({
   const [processedThumbnail, setProcessedThumbnail] = useState<Blob | null>(null);
   const [skipProcessing, setSkipProcessing] = useState(false);
   const skipProcessingRef = useRef(false);
+  const [selectedSound, setSelectedSound] = useState<{ id: string; file_url: string } | null>(null);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const autosaveTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const { trendingTags } = useTrendingHashtags(10);
 
   const handleFileSelect = async (selectedFile: File) => {
@@ -261,6 +264,7 @@ export function NewUploadTab({
           user_id: userId,
           caption: caption.trim() || null,
           hashtags: hashtags.length > 0 ? hashtags : null,
+          sound_id: selectedSound?.id || null,
         })
         .select('id')
         .single();
@@ -663,6 +667,15 @@ export function NewUploadTab({
               </div>
             </div>
           )}
+
+          <div style={{ marginBottom: 20 }}>
+            <audio ref={audioRef} className="hidden" />
+            <SoundPicker
+              selectedSoundId={selectedSound?.id || null}
+              onSelectSound={(sound) => setSelectedSound(sound)}
+              audioRef={audioRef}
+            />
+          </div>
 
           {uploading && uploadProgress > 0 && (
             <div style={{
