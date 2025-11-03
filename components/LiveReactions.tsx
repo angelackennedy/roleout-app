@@ -78,8 +78,21 @@ export default function LiveReactions({ sessionId, userId }: LiveReactionsProps)
     }
   };
 
-  // Track optimistic reactions to prevent double-counting
+  // Track optimistic reactions by ID to prevent double-counting
   const optimisticReactionsRef = useRef<Set<string>>(new Set());
+
+  // Generate UUID client-side
+  const generateUUID = () => {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+      return crypto.randomUUID();
+    }
+    // Fallback for older browsers
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+      const r = Math.random() * 16 | 0;
+      const v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+  };
 
   // Send a reaction
   const sendReaction = async (emoji: Emoji) => {
@@ -98,9 +111,11 @@ export default function LiveReactions({ sessionId, userId }: LiveReactionsProps)
       return;
     }
 
-    // Create temporary ID for optimistic update tracking
-    const tempId = `${userId}-${emoji}-${now}`;
-    optimisticReactionsRef.current.add(tempId);
+    // Generate client-side UUID for this reaction
+    const reactionId = generateUUID();
+    
+    // Add ID to optimistic set BEFORE sending INSERT
+    optimisticReactionsRef.current.add(reactionId);
 
     // Optimistic UI: increment counter immediately
     setCounts((prev) => ({
@@ -118,6 +133,7 @@ export default function LiveReactions({ sessionId, userId }: LiveReactionsProps)
       const { error } = await supabase
         .from('live_reactions')
         .insert({
+          id: reactionId,
           session_id: sessionId,
           user_id: userId,
           emoji,
@@ -130,7 +146,12 @@ export default function LiveReactions({ sessionId, userId }: LiveReactionsProps)
           ...prev,
           [emoji]: Math.max(prev[emoji] - 1, 0),
         }));
-        optimisticReactionsRef.current.delete(tempId);
+        optimisticReactionsRef.current.delete(reactionId);
+      } else {
+        // Clean up after a few seconds
+        setTimeout(() => {
+          optimisticReactionsRef.current.delete(reactionId);
+        }, 5000);
       }
     } catch (err) {
       console.error('Unexpected error sending reaction:', err);
@@ -139,7 +160,7 @@ export default function LiveReactions({ sessionId, userId }: LiveReactionsProps)
         ...prev,
         [emoji]: Math.max(prev[emoji] - 1, 0),
       }));
-      optimisticReactionsRef.current.delete(tempId);
+      optimisticReactionsRef.current.delete(reactionId);
     }
   };
 
@@ -185,22 +206,19 @@ export default function LiveReactions({ sessionId, userId }: LiveReactionsProps)
           console.log('New reaction received:', payload);
           const newReaction = payload.new as LiveReaction;
           
-          // Skip if this was our own optimistic update
-          if (newReaction.user_id === userId) {
-            // Just clean up the optimistic tracking set
-            setTimeout(() => {
-              optimisticReactionsRef.current.clear();
-            }, 1000);
+          // Skip if this reaction was sent from THIS tab (ID is in our optimistic set)
+          if (optimisticReactionsRef.current.has(newReaction.id)) {
+            console.log('Skipping optimistic reaction:', newReaction.id);
             return;
           }
 
-          // Increment counter for reactions from other users
+          // Increment counter for reactions from other tabs or users
           setCounts((prev) => ({
             ...prev,
             [newReaction.emoji]: prev[newReaction.emoji] + 1,
           }));
 
-          // Show particle animation for other users
+          // Show particle animation
           addParticle(newReaction.emoji);
         }
       )
