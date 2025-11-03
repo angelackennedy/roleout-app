@@ -2,14 +2,14 @@
 CREATE TABLE IF NOT EXISTS public.live_chat (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   session_id UUID NOT NULL REFERENCES public.live_sessions(id) ON DELETE CASCADE,
-  user_id UUID NOT NULL,
+  user_id UUID REFERENCES public.profiles(id),
   message TEXT NOT NULL,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- Create index for efficient queries by session and time
 CREATE INDEX IF NOT EXISTS idx_live_chat_session_time 
-ON public.live_chat(session_id, created_at DESC);
+ON public.live_chat(session_id, created_at ASC);
 
 -- Enable Row Level Security
 ALTER TABLE public.live_chat ENABLE ROW LEVEL SECURITY;
