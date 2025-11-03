@@ -68,6 +68,7 @@ export function NewUploadTab({
   const [processedVideo, setProcessedVideo] = useState<Blob | null>(null);
   const [processedThumbnail, setProcessedThumbnail] = useState<Blob | null>(null);
   const [skipProcessing, setSkipProcessing] = useState(false);
+  const skipProcessingRef = useRef(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -91,6 +92,8 @@ export function NewUploadTab({
     setError(null);
     setProcessedVideo(null);
     setProcessedThumbnail(null);
+    setSkipProcessing(false);
+    skipProcessingRef.current = false;
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -199,27 +202,55 @@ export function NewUploadTab({
       let videoToUpload: File | Blob | null = file;
       let thumbnailToUpload: Blob | null = null;
 
+      skipProcessingRef.current = false;
+
       if (file && !skipProcessing && !processedVideo) {
         setProcessingProgress({ stage: 'loading', progress: 0, message: 'Starting processing...' });
 
-        const result = await processVideo(file, (progress) => {
+        const processingPromise = processVideo(file, (progress) => {
+          if (skipProcessingRef.current) {
+            return;
+          }
           setProcessingProgress(progress);
+        }).then((result) => {
+          if (result.video && result.thumbnail) {
+            setProcessedVideo(result.video);
+            setProcessedThumbnail(result.thumbnail);
+          }
+          return result;
+        }).catch((err) => {
+          console.error('Background processing error:', err);
+          return { video: null, thumbnail: null };
         });
 
-        if (result.video && result.thumbnail) {
+        const skipCheck = new Promise<{ video: null; thumbnail: null }>((resolve) => {
+          const checkInterval = setInterval(() => {
+            if (skipProcessingRef.current) {
+              clearInterval(checkInterval);
+              resolve({ video: null, thumbnail: null });
+            }
+          }, 100);
+          
+          processingPromise.finally(() => clearInterval(checkInterval));
+        });
+
+        const result = await Promise.race([processingPromise, skipCheck]);
+
+        if (skipProcessingRef.current || !result.video) {
+          videoToUpload = file;
+          setProcessingProgress(null);
+        } else if (result.video && result.thumbnail) {
           videoToUpload = result.video;
           thumbnailToUpload = result.thumbnail;
-          setProcessedVideo(result.video);
-          setProcessedThumbnail(result.thumbnail);
+          setProcessingProgress(null);
         } else {
           videoToUpload = file;
+          setProcessingProgress(null);
         }
       } else if (processedVideo) {
         videoToUpload = processedVideo;
         thumbnailToUpload = processedThumbnail;
       }
-
-      setProcessingProgress(null);
       setUploadProgress(5);
 
       const hashtags = extractHashtags(caption);
@@ -295,6 +326,10 @@ export function NewUploadTab({
       }
 
       setUploadProgress(100);
+      
+      setSkipProcessing(false);
+      skipProcessingRef.current = false;
+      
       onPublish();
     } catch (err: any) {
       console.error('Publish error:', err);
@@ -303,6 +338,8 @@ export function NewUploadTab({
       setProcessingProgress(null);
     } finally {
       setUploading(false);
+      setSkipProcessing(false);
+      skipProcessingRef.current = false;
     }
   };
 
@@ -389,6 +426,7 @@ export function NewUploadTab({
           {canSkipProcessing && (
             <button
               onClick={() => {
+                skipProcessingRef.current = true;
                 setSkipProcessing(true);
                 setProcessingProgress(null);
               }}
