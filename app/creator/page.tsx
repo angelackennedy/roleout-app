@@ -40,7 +40,7 @@ export default function CreatorDashboard() {
 
   useEffect(() => {
     if (!user) {
-      router.push('/auth');
+      router.push('/');
       return;
     }
     fetchAnalytics();

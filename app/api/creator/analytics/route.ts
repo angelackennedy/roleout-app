@@ -52,21 +52,45 @@ export async function GET(request: NextRequest) {
       .in('post_id', postIds)
       .gte('created_at', startDate.toISOString());
 
+    if (impressionsError) {
+      console.error('Error fetching impressions:', impressionsError);
+      return NextResponse.json(
+        { error: 'Failed to fetch impressions' },
+        { status: 500 }
+      );
+    }
+
     const totalViews = impressions?.length || 0;
 
     const { data: likes, error: likesError } = await supabase
-      .from('likes')
+      .from('post_likes')
       .select('post_id, created_at')
       .in('post_id', postIds)
       .gte('created_at', startDate.toISOString());
+
+    if (likesError) {
+      console.error('Error fetching likes:', likesError);
+      return NextResponse.json(
+        { error: 'Failed to fetch likes' },
+        { status: 500 }
+      );
+    }
 
     const totalLikes = likes?.length || 0;
 
     const { data: comments, error: commentsError } = await supabase
-      .from('comments')
+      .from('post_comments')
       .select('post_id, created_at')
       .in('post_id', postIds)
       .gte('created_at', startDate.toISOString());
+
+    if (commentsError) {
+      console.error('Error fetching comments:', commentsError);
+      return NextResponse.json(
+        { error: 'Failed to fetch comments' },
+        { status: 500 }
+      );
+    }
 
     const totalComments = comments?.length || 0;
 
@@ -77,16 +101,32 @@ export async function GET(request: NextRequest) {
       .gte('created_at', startDate.toISOString())
       .order('created_at', { ascending: true });
 
+    if (followersError) {
+      console.error('Error fetching followers:', followersError);
+      return NextResponse.json(
+        { error: 'Failed to fetch followers' },
+        { status: 500 }
+      );
+    }
+
     const followerGrowth = followers?.length || 0;
 
     const dailyFollowerCounts = new Map<string, number>();
     let cumulativeFollowers = 0;
 
-    const { data: existingFollowers } = await supabase
+    const { data: existingFollowers, error: existingFollowersError } = await supabase
       .from('follows')
       .select('id')
       .eq('following_id', user.id)
       .lt('created_at', startDate.toISOString());
+
+    if (existingFollowersError) {
+      console.error('Error fetching existing followers:', existingFollowersError);
+      return NextResponse.json(
+        { error: 'Failed to fetch existing followers' },
+        { status: 500 }
+      );
+    }
 
     cumulativeFollowers = existingFollowers?.length || 0;
 
@@ -123,17 +163,35 @@ export async function GET(request: NextRequest) {
       .order('view_count', { ascending: false })
       .limit(10);
 
+    if (topPostsError) {
+      console.error('Error fetching top posts:', topPostsError);
+      return NextResponse.json(
+        { error: 'Failed to fetch top posts' },
+        { status: 500 }
+      );
+    }
+
     const topPosts = await Promise.all(
       (topPostsData || []).map(async (post) => {
-        const { data: postLikes } = await supabase
-          .from('likes')
+        const { data: postLikes, error: postLikesError } = await supabase
+          .from('post_likes')
           .select('id')
           .eq('post_id', post.id);
 
-        const { data: postComments } = await supabase
-          .from('comments')
+        if (postLikesError) {
+          console.error('Error fetching post likes:', postLikesError);
+          throw new Error('Failed to fetch post likes');
+        }
+
+        const { data: postComments, error: postCommentsError } = await supabase
+          .from('post_comments')
           .select('id')
           .eq('post_id', post.id);
+
+        if (postCommentsError) {
+          console.error('Error fetching post comments:', postCommentsError);
+          throw new Error('Failed to fetch post comments');
+        }
 
         const likesCount = postLikes?.length || 0;
         const commentsCount = postComments?.length || 0;
