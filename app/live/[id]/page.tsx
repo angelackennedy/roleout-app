@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import { useWebRTCViewer } from '@/lib/hooks/useWebRTCViewer';
 import { formatRelativeTime } from '@/lib/time-utils';
 import Link from 'next/link';
 
@@ -18,12 +19,17 @@ type LiveSession = {
 
 export default function LiveViewerPage() {
   const params = useParams();
-  const router = useRouter();
   const sessionId = params.id as string;
   const [session, setSession] = useState<LiveSession | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const viewerIncrementedRef = useRef(false);
+
+  const { isConnected, remoteVideoRef } = useWebRTCViewer({
+    sessionId,
+    isLive: session?.is_live || false,
+    onError: (err) => setError(err),
+  });
 
   const fetchSession = async () => {
     try {
@@ -199,9 +205,6 @@ export default function LiveViewerPage() {
             width: '100%',
             paddingBottom: '56.25%', // 16:9 aspect ratio
             background: '#000',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
           }}>
             <div style={{
               position: 'absolute',
@@ -217,26 +220,44 @@ export default function LiveViewerPage() {
             }}>
               {session.is_live ? (
                 <>
-                  <div style={{
-                    fontSize: 64,
-                    marginBottom: 16,
-                  }}>
-                    🎥
-                  </div>
-                  <div style={{
-                    fontSize: 24,
-                    fontWeight: 600,
-                    color: 'rgba(255,255,255,0.8)',
-                  }}>
-                    Live Stream
-                  </div>
-                  <div style={{
-                    fontSize: 14,
-                    color: 'rgba(255,255,255,0.5)',
-                    marginTop: 8,
-                  }}>
-                    (Video player integration coming soon)
-                  </div>
+                  {isConnected ? (
+                    <video
+                      ref={remoteVideoRef}
+                      autoPlay
+                      playsInline
+                      style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'contain',
+                      }}
+                    />
+                  ) : (
+                    <>
+                      <div style={{
+                        fontSize: 64,
+                        marginBottom: 16,
+                      }}>
+                        🔄
+                      </div>
+                      <div style={{
+                        fontSize: 24,
+                        fontWeight: 600,
+                        color: 'rgba(255,255,255,0.8)',
+                      }}>
+                        Connecting to stream...
+                      </div>
+                      <div style={{
+                        fontSize: 14,
+                        color: 'rgba(255,255,255,0.5)',
+                        marginTop: 8,
+                      }}>
+                        Establishing WebRTC connection
+                      </div>
+                    </>
+                  )}
                 </>
               ) : (
                 <>
@@ -280,6 +301,7 @@ export default function LiveViewerPage() {
                   display: 'flex',
                   alignItems: 'center',
                   gap: 6,
+                  zIndex: 10,
                 }}>
                   <div style={{
                     width: 8,
@@ -289,6 +311,24 @@ export default function LiveViewerPage() {
                     animation: 'pulse 2s infinite',
                   }} />
                   LIVE
+                </div>
+              )}
+
+              {/* Connection status */}
+              {session.is_live && isConnected && (
+                <div style={{
+                  position: 'absolute',
+                  top: 20,
+                  right: 80,
+                  background: 'rgba(0,255,0,0.7)',
+                  color: 'white',
+                  padding: '6px 12px',
+                  borderRadius: 4,
+                  fontSize: 12,
+                  fontWeight: 600,
+                  zIndex: 10,
+                }}>
+                  ✓ Connected
                 </div>
               )}
 
@@ -303,6 +343,7 @@ export default function LiveViewerPage() {
                 borderRadius: 4,
                 fontSize: 12,
                 fontWeight: 600,
+                zIndex: 10,
               }}>
                 👁️ {session.viewers} {session.viewers === 1 ? 'viewer' : 'viewers'}
               </div>
