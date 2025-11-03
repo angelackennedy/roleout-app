@@ -51,7 +51,7 @@ export function ExportDialog({ project, assets, userId, onClose }: ExportDialogP
   };
 
   const exportWithMediaRecorder = async () => {
-    setStatus('Quick export using MediaRecorder...');
+    setStatus('Preparing quick export...');
     setIsExporting(true);
 
     try {
@@ -63,9 +63,49 @@ export function ExportDialog({ project, assets, userId, onClose }: ExportDialogP
 
       if (!ctx) throw new Error('Could not get canvas context');
 
+      // Preload all video assets
+      setStatus('Loading assets...');
+      const videoElements = new Map<string, HTMLVideoElement>();
+      
+      for (const asset of assets.filter(a => a.type === 'video')) {
+        const video = document.createElement('video');
+        video.src = asset.url;
+        video.crossOrigin = 'anonymous';
+        video.muted = true;
+        
+        await new Promise<void>((resolve) => {
+          video.addEventListener('loadedmetadata', () => {
+            videoElements.set(asset.id, video);
+            resolve();
+          });
+          video.addEventListener('error', () => resolve());
+        });
+      }
+
+      setStatus('Recording...');
+
       // Capture canvas stream
-      const stream = canvas.captureStream(settings.fps);
-      const mediaRecorder = new MediaRecorder(stream, {
+      const videoStream = canvas.captureStream(settings.fps);
+      
+      // Mix audio streams if present
+      let audioContext: AudioContext | undefined;
+      let dest: MediaStreamAudioDestinationNode | undefined;
+      
+      const audioClips = project.tracks
+        .flatMap(t => t.clips)
+        .filter(c => c.type === 'audio' || (c.type === 'video' && !c.muted));
+
+      if (audioClips.length > 0) {
+        audioContext = new AudioContext();
+        dest = audioContext.createMediaStreamDestination();
+        // Note: Full audio mixing would be implemented here
+      }
+
+      const finalStream = audioContext && dest 
+        ? new MediaStream([...videoStream.getVideoTracks(), ...dest.stream.getAudioTracks()])
+        : videoStream;
+
+      const mediaRecorder = new MediaRecorder(finalStream, {
         mimeType: 'video/webm;codecs=vp8',
         videoBitsPerSecond: settings.quality * 50000,
       });
@@ -74,6 +114,7 @@ export function ExportDialog({ project, assets, userId, onClose }: ExportDialogP
       mediaRecorder.ondataavailable = (e) => chunks.push(e.data);
 
       mediaRecorder.onstop = async () => {
+        if (audioContext) audioContext.close();
         const blob = new Blob(chunks, { type: 'video/webm' });
         await uploadAndCreateDraft(blob);
       };
@@ -94,16 +135,62 @@ export function ExportDialog({ project, assets, userId, onClose }: ExportDialogP
         ctx.fillStyle = '#000';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        // Render clips (simplified)
-        project.tracks.forEach(track => {
+        // Render all clips in order
+        const sortedTracks = [...project.tracks].sort((a, b) => {
+          const order = { video: 0, sticker: 1, text: 2, audio: 3 };
+          return order[a.type] - order[b.type];
+        });
+
+        sortedTracks.forEach(track => {
           track.clips.forEach(clip => {
-            if (currentTime >= clip.startTime && currentTime < clip.startTime + clip.duration) {
-              if (clip.type === 'text') {
-                ctx.font = `${clip.fontSize || 48}px ${clip.fontFamily || 'Arial'}`;
+            const isVisible = currentTime >= clip.startTime && 
+                             currentTime < clip.startTime + clip.duration;
+            
+            if (!isVisible) return;
+
+            const relativeTime = currentTime - clip.startTime;
+            const asset = assets.find(a => a.id === clip.assetId);
+
+            try {
+              if (clip.type === 'video' && asset && videoElements.has(asset.id)) {
+                const video = videoElements.get(asset.id)!;
+                video.currentTime = clip.trimStart + relativeTime;
+                
+                // Apply effects
+                let filterString = '';
+                if (clip.effects.brightness) filterString += `brightness(${clip.effects.brightness}) `;
+                if (clip.effects.contrast) filterString += `contrast(${clip.effects.contrast}) `;
+                if (clip.effects.saturation) filterString += `saturate(${clip.effects.saturation}) `;
+                if (filterString) ctx.filter = filterString.trim();
+
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                ctx.filter = 'none';
+              } else if (clip.type === 'text') {
+                const text = clip.text || 'Text';
+                const fontSize = clip.fontSize || 48;
+                ctx.font = `${fontSize}px ${clip.fontFamily || 'Arial'}`;
                 ctx.fillStyle = clip.color || '#ffffff';
                 ctx.textAlign = 'center';
-                ctx.fillText(clip.text || 'Text', canvas.width / 2, canvas.height / 2);
+                ctx.textBaseline = 'middle';
+                
+                if (clip.shadow) {
+                  ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
+                  ctx.shadowBlur = 10;
+                  ctx.shadowOffsetX = 2;
+                  ctx.shadowOffsetY = 2;
+                }
+                
+                if (clip.stroke) {
+                  ctx.strokeStyle = clip.stroke;
+                  ctx.lineWidth = 4;
+                  ctx.strokeText(text, canvas.width / 2, canvas.height / 2);
+                }
+                
+                ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+                ctx.shadowColor = 'transparent';
               }
+            } catch (e) {
+              console.warn('Render error:', e);
             }
           });
         });
@@ -116,7 +203,7 @@ export function ExportDialog({ project, assets, userId, onClose }: ExportDialogP
       renderFrame();
     } catch (error) {
       console.error('Export error:', error);
-      setStatus('Export failed');
+      setStatus('Export failed: ' + (error as Error).message);
       setIsExporting(false);
     }
   };

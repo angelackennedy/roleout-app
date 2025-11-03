@@ -68,6 +68,9 @@ export default function Header() {
               <Link href="/upload" className="hover:text-gray-400">
                 Upload
               </Link>
+              <Link href="/editor" className="hover:text-gray-400">
+                Editor
+              </Link>
             </>
           )}
 
