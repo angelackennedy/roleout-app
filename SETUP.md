@@ -132,26 +132,39 @@ Creates the reporting system for content moderation:
 - Reports are stored for admin review (admins have `role = 'admin'` in JWT)
 - Updated RPC functions (`search_posts`, `get_posts_by_hashtag`) filter out reported posts
 
-### 12. Analytics and View Tracking
+### 12. Analytics and Algorithmic Feed
 File: `supabase-analytics-schema.sql`
 
-Creates the analytics system for tracking post impressions and view counts:
-- `post_impressions` table with post_id, user_id, created_at
+Creates the complete analytics system with algorithmic ranking:
+
+**Post Impressions Table:**
+- Tracks user engagement: `ms_watched`, `liked`, `commented`, `followed_creator`
 - Unique constraint prevents duplicate impressions per user per day
-- Adds `view_count` column to posts table
-- **Automatic trigger** updates view_count when impressions are inserted
-- Indexes on post_id and user_id for fast lookups
+- Updates accumulate watch time and engagement signals throughout the day
+- Indexes on user_id/created_at and post_id for fast queries
+
+**Algorithmic Ranking Function (`get_ranked_feed`):**
+- Personalized For You feed using machine learning-inspired scoring
+- **Score components:**
+  - Watch time (normalized 0-1, max 30s meaningful)
+  - Like weight: 1.2
+  - Comment weight: 1.5
+  - Follow creator weight: 2.0
+  - Recency decay: exponential over 48 hours
+  - Overexposure penalty: -3.0 if seen 3+ times today
+  - Creator diversity: prefer first post from each creator
+  - Cold start boost: +0.8 for posts with < 5 views
 
 **How it works:**
-- When a video is 50% visible for >= 2 seconds, an impression is tracked
-- Unique constraint ensures each user can only create one impression per post per day
-- View count automatically updates via database trigger (counts unique viewers)
-- View count displayed on the post UI with eye icon (👁️)
-- API route `/api/impressions` handles impression tracking
+1. User scrolls through feed, videos track watch time when 50%+ visible
+2. Engagement signals (likes, comments, follows) sent to `/api/impressions`
+3. Impressions upsert: accumulate watch time, set engagement flags
+4. Ranking function calculates personalized scores for each post
+5. Feed shows highest-scoring posts first, filtered for reported content
 
 **RLS Security:**
-- Users can only INSERT their own impressions (authenticated, user_id = auth.uid())
-- Anyone can SELECT impressions (needed for view count calculations)
+- Users can only INSERT/UPDATE/SELECT their own impressions
+- Ranking function runs with SECURITY DEFINER for performance
 
 ### 13. RLS and Performance Audit (IMPORTANT)
 File: `supabase-rls-indexes-audit.sql`
