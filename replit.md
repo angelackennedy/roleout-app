@@ -4,6 +4,17 @@
 RollCall is a video-based social platform focused on authenticity and transparent moderation. Built with Next.js 14, TypeScript, Supabase, and Tailwind CSS.
 
 ## Recent Changes
+- **2025-11-03**: Notifications System
+  - Automatic notifications for likes, comments, and follows
+  - Created notifications table with RLS policies and composite indexes
+  - Database triggers auto-create notifications when users interact
+  - Realtime notification feed at /notifications with unread badge
+  - Unread count badge in header (bell icon with red counter)
+  - Mark as read on click, "Mark all as read" button
+  - Clickable notifications link to post pages or user profiles
+  - Self-notification prevention (don't notify for own actions)
+  - Live updates via Supabase realtime subscriptions
+
 - **2025-11-03**: Direct Messaging System
   - Built 1-on-1 DM system with realtime chat
   - Created conversations, conversation_members, and messages tables
@@ -71,16 +82,25 @@ RollCall is a video-based social platform focused on authenticity and transparen
 4. **Video Upload** - Client-side trimming (≤60s), Supabase Storage
 5. **Post Page** - Video playback, likes, comments, flagging
 6. **User Profiles** - User info and posted videos
-7. **Analytics** - Real-time view tracking, engagement metrics
-8. **Moderation Panel (FA³)** - Public transparency log, community flags
-9. **Wallet Placeholder (FA⁴)** - UI shell for crypto integration
-10. **Metrics Placeholder (FA⁵)** - Analytics dashboard shell
+7. **Notifications** - Realtime notifications for likes, comments, follows with unread badge
+8. **Direct Messaging** - 1-on-1 DMs with realtime chat and message history
+9. **Live Streaming** - WebRTC sessions with live chat and emoji reactions
+10. **Analytics** - Real-time view tracking, engagement metrics
+11. **Moderation Panel (FA³)** - Public transparency log, community flags
+12. **Wallet Placeholder (FA⁴)** - UI shell for crypto integration
+13. **Metrics Placeholder (FA⁵)** - Analytics dashboard shell
 
 ### Database Schema
 - `profiles` - User profiles (extends auth.users)
 - `posts` - Video posts with engagement counts
-- `post_drafts` - Draft posts with autosave (new)
-- `post_impressions` - Analytics tracking for algorithmic feed (new)
+- `post_drafts` - Draft posts with autosave
+- `post_impressions` - Analytics tracking for algorithmic feed
+- `notifications` - User notifications for likes, comments, follows (new)
+- `conversations` - DM conversations metadata
+- `conversation_members` - DM conversation participants
+- `messages` - Direct messages with realtime chat
+- `live_chat` - Live session chat messages
+- `live_reactions` - Live emoji reactions with realtime sync
 - `likes` - Post likes (with triggers for count updates)
 - `comments` - Post comments (with triggers for count updates)
 - `moderation_actions` - Public moderation log
