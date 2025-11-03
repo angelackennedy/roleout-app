@@ -16,6 +16,7 @@ type PostWithNested = {
   like_count: number;
   comment_count: number;
   share_count: number;
+  view_count: number;
   created_at: string;
   profiles: {
     id: string;
@@ -35,6 +36,7 @@ type PostWithFlat = {
   like_count: number;
   comment_count: number;
   share_count: number;
+  view_count: number;
   created_at: string;
   username: string;
   display_name: string;
@@ -55,9 +57,12 @@ function hasNestedProfile(post: Post): post is PostWithNested {
 
 export default function VideoPost({ post, isActive, userId = null }: VideoPostProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const impressionTrackedRef = useRef(false);
+  const visibilityTimerRef = useRef<NodeJS.Timeout | null>(null);
   const { isLiked, likeCount, toggleLike, isLoading } = usePostLike({
     postId: post.id,
     initialLikeCount: post.like_count,
@@ -79,14 +84,64 @@ export default function VideoPost({ post, isActive, userId = null }: VideoPostPr
     }
   }, [isActive]);
 
+  useEffect(() => {
+    if (!userId || impressionTrackedRef.current) return;
+
+    const container = containerRef.current;
+    if (!container) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.intersectionRatio >= 0.5) {
+            if (visibilityTimerRef.current) {
+              clearTimeout(visibilityTimerRef.current);
+            }
+            visibilityTimerRef.current = setTimeout(async () => {
+              if (!impressionTrackedRef.current) {
+                impressionTrackedRef.current = true;
+                try {
+                  await fetch('/api/impressions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ post_id: post.id }),
+                  });
+                } catch (error) {
+                  console.error('Failed to track impression:', error);
+                }
+              }
+            }, 2000);
+          } else {
+            if (visibilityTimerRef.current) {
+              clearTimeout(visibilityTimerRef.current);
+              visibilityTimerRef.current = null;
+            }
+          }
+        });
+      },
+      { threshold: [0, 0.5, 1] }
+    );
+
+    observer.observe(container);
+
+    return () => {
+      if (visibilityTimerRef.current) {
+        clearTimeout(visibilityTimerRef.current);
+      }
+      observer.disconnect();
+    };
+  }, [userId, post.id]);
+
   return (
-    <div style={{
-      position: 'relative',
-      height: '100vh',
-      width: '100%',
-      scrollSnapAlign: 'start',
-      background: '#000',
-    }}>
+    <div 
+      ref={containerRef}
+      style={{
+        position: 'relative',
+        height: '100vh',
+        width: '100%',
+        scrollSnapAlign: 'start',
+        background: '#000',
+      }}>
       <video
         ref={videoRef}
         src={post.video_url}
@@ -264,6 +319,24 @@ export default function VideoPost({ post, isActive, userId = null }: VideoPostPr
             {post.share_count}
           </span>
         </button>
+
+        <div style={{
+          background: 'rgba(0,0,0,0.5)',
+          border: '2px solid white',
+          borderRadius: '50%',
+          width: 56,
+          height: 56,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: 24,
+          flexDirection: 'column',
+        }}>
+          <span>👁️</span>
+          <span style={{ fontSize: 12, fontWeight: 600, marginTop: 4, color: 'white' }}>
+            {post.view_count || 0}
+          </span>
+        </div>
 
         <div style={{ position: 'relative' }}>
           <button 
