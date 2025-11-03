@@ -348,9 +348,10 @@ export default function Home() {
       }
 
       if (fullPosts && fullPosts.length > 0) {
+        const postsMap = new Map(fullPosts.map((p: Post) => [p.id, p]));
         const orderedPosts = postIds
-          .map((id: string) => fullPosts.find((p: Post) => p.id === id))
-          .filter((p): p is Post => Boolean(p));
+          .map((id: string) => postsMap.get(id))
+          .filter((p: Post | undefined): p is Post => p !== undefined);
         
         setPosts((prev) => pageNum === 0 ? orderedPosts : [...prev, ...orderedPosts]);
         setHasMore(rankedPosts.length === POSTS_PER_PAGE);
