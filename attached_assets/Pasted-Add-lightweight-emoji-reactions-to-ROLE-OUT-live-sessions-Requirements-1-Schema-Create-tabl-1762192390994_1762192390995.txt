@@ -1,0 +1,48 @@
+Add lightweight emoji reactions to ROLE OUT live sessions.
+
+Requirements
+1) Schema:
+   - Create table public.live_reactions (
+       id uuid primary key default gen_random_uuid(),
+       session_id uuid not null references public.live_sessions(id) on delete cascade,
+       user_id uuid not null,
+       emoji text not null check (emoji in ('❤️','🔥','👏')),
+       created_at timestamptz default now()
+     );
+   - Index on (session_id, created_at desc).
+   - Enable RLS with policies:
+       a) INSERT/SELECT allowed only for authenticated users.
+          USING (auth.uid() is not null)
+          WITH CHECK (auth.uid() = user_id)
+       b) Optional: allow SELECT for everyone if the session is live.
+   - (Do NOT change existing live_sessions.)
+
+2) UI on /live/[id]:
+   - Add a small “React” bar under the video with three buttons: ❤️ 🔥 👏
+   - Each click inserts a row into public.live_reactions with {session_id, user_id, emoji}.
+   - Optimistic UI: bump counters immediately, roll back on error.
+   - Live counters (total per emoji) shown next to each button, updating in realtime.
+
+3) Realtime:
+   - Subscribe to Postgres changes on public.live_reactions filtered by session_id.
+   - On INSERT, increment the correct emoji counter locally without a full refetch.
+   - On mount, fetch last 500 reactions for the session and compute counts.
+
+4) Anti-spam (client only for now):
+   - Throttle: max 5 reactions per user per 3 seconds per emoji.
+   - Disable reaction buttons if user not signed in; show link to /login.
+
+5) Nice touch:
+   - Trigger a brief floating particle animation (e.g., a heart that rises and fades) at the video corner when a reaction is sent. Keep it lightweight; no global CSS changes.
+
+6) Typescript + structure:
+   - Use existing supabase client in lib/supabase.ts.
+   - Client components with 'use client'.
+   - Keep code in a small component, e.g., components/LiveReactions.tsx, imported on /live/[id].
+
+7) Testing steps (print at end):
+   - /login → sign in on two tabs.
+   - /test-supabase → Create New Session → Go Live.
+   - Open /live/{id} on both tabs; click ❤️/🔥/👏.
+   - Watch counters and floating animation update instantly on both tabs.
+   - Verify rows in public.live_reactions and RLS blocks anonymous inserts.
