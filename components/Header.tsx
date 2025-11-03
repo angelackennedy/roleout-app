@@ -36,6 +36,9 @@ export default function Header() {
               <Link href="/search" className="hover:text-gray-400">
                 Search
               </Link>
+              <Link href="/inbox" className="hover:text-gray-400">
+                Messages
+              </Link>
               <Link 
                 href="/notifications" 
                 className="hover:text-gray-400"

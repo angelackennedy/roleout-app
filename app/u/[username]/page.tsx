@@ -24,11 +24,31 @@ export default function UserProfilePage() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [startingConversation, setStartingConversation] = useState(false);
 
   const { isFollowing, isLoading: followLoading, followersCount, followingCount, toggleFollow } = useFollow({
     targetUserId: profile?.id || null,
     currentUserId: user?.id || null,
   });
+
+  const handleMessage = async () => {
+    if (!user || !profile) return;
+
+    setStartingConversation(true);
+    try {
+      const { data, error: rpcError } = await supabase
+        .rpc('get_or_create_conversation', { other_user_id: profile.id });
+
+      if (rpcError) throw rpcError;
+
+      router.push(`/dm/${data}`);
+    } catch (err) {
+      console.error('Error creating conversation:', err);
+      alert('Failed to start conversation');
+    } finally {
+      setStartingConversation(false);
+    }
+  };
 
   useEffect(() => {
     if (username) {
@@ -213,26 +233,50 @@ export default function UserProfilePage() {
           </div>
 
           {user && user.id !== profile.id && (
-            <button
-              onClick={toggleFollow}
-              disabled={followLoading}
-              style={{
-                background: isFollowing
-                  ? 'rgba(255,255,255,0.1)'
-                  : 'linear-gradient(135deg, rgba(212,175,55,0.8) 0%, rgba(212,175,55,0.6) 100%)',
-                border: isFollowing ? '2px solid rgba(255,255,255,0.2)' : 'none',
-                borderRadius: 24,
-                padding: '12px 32px',
-                color: 'white',
-                fontSize: 14,
-                fontWeight: 600,
-                cursor: followLoading ? 'not-allowed' : 'pointer',
-                opacity: followLoading ? 0.6 : 1,
-                marginBottom: 20,
-              }}
-            >
-              {followLoading ? 'Loading...' : isFollowing ? 'Unfollow' : 'Follow'}
-            </button>
+            <div style={{
+              display: 'flex',
+              gap: 12,
+              justifyContent: 'center',
+              marginBottom: 20,
+            }}>
+              <button
+                onClick={toggleFollow}
+                disabled={followLoading}
+                style={{
+                  background: isFollowing
+                    ? 'rgba(255,255,255,0.1)'
+                    : 'linear-gradient(135deg, rgba(212,175,55,0.8) 0%, rgba(212,175,55,0.6) 100%)',
+                  border: isFollowing ? '2px solid rgba(255,255,255,0.2)' : 'none',
+                  borderRadius: 24,
+                  padding: '12px 32px',
+                  color: 'white',
+                  fontSize: 14,
+                  fontWeight: 600,
+                  cursor: followLoading ? 'not-allowed' : 'pointer',
+                  opacity: followLoading ? 0.6 : 1,
+                }}
+              >
+                {followLoading ? 'Loading...' : isFollowing ? 'Unfollow' : 'Follow'}
+              </button>
+
+              <button
+                onClick={handleMessage}
+                disabled={startingConversation}
+                style={{
+                  background: 'rgba(255,255,255,0.1)',
+                  border: '2px solid rgba(212,175,55,0.3)',
+                  borderRadius: 24,
+                  padding: '12px 32px',
+                  color: 'white',
+                  fontSize: 14,
+                  fontWeight: 600,
+                  cursor: startingConversation ? 'not-allowed' : 'pointer',
+                  opacity: startingConversation ? 0.6 : 1,
+                }}
+              >
+                {startingConversation ? 'Loading...' : 'Message'}
+              </button>
+            </div>
           )}
 
           <div style={{
