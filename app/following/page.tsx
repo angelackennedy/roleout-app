@@ -8,6 +8,7 @@ import { useAuth } from '@/lib/auth-context';
 import { usePostLike } from '@/lib/hooks/usePostLike';
 import { CommentsDrawer } from '@/components/CommentsDrawer';
 import { useRouter } from 'next/navigation';
+import { useVideoPreload } from '@/lib/hooks/useVideoPreload';
 
 type Profile = {
   id: string;
@@ -30,7 +31,12 @@ type Post = {
   profiles: Profile;
 };
 
-function VideoPost({ post, isVisible, userId }: { post: Post; isVisible: boolean; userId: string | null }) {
+function VideoPost({ post, userId, index, currentIndex }: { 
+  post: Post; 
+  userId: string | null;
+  index: number;
+  currentIndex: number;
+}) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [commentsOpen, setCommentsOpen] = useState(false);
   const { isLiked, likeCount, toggleLike, isLoading } = usePostLike({
@@ -39,16 +45,12 @@ function VideoPost({ post, isVisible, userId }: { post: Post; isVisible: boolean
     userId,
   });
 
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-
-    if (isVisible) {
-      video.play().catch(() => {});
-    } else {
-      video.pause();
-    }
-  }, [isVisible]);
+  // Use video preload hook for optimized loading
+  useVideoPreload({
+    videoRef,
+    index,
+    currentIndex,
+  });
 
   return (
     <div style={{
@@ -539,7 +541,8 @@ export default function FollowingFeed() {
         <VideoPost
           key={post.id}
           post={post}
-          isVisible={index === currentIndex}
+          index={index}
+          currentIndex={currentIndex}
           userId={user?.id || null}
         />
       ))}

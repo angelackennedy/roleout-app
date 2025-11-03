@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
 import { useRouter } from 'next/navigation';
+import { useDebouncedSearch } from '@/lib/hooks/useDebounce';
 
 type Post = {
   id: string;
@@ -42,7 +43,7 @@ export default function SearchPage() {
   const { user } = useAuth();
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<TabType>('top');
-  const [searchQuery, setSearchQuery] = useState('');
+  const { searchQuery, setSearchQuery, debouncedSearchQuery, isSearching } = useDebouncedSearch('', 300);
   const [posts, setPosts] = useState<Post[]>([]);
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [hashtags, setHashtags] = useState<Hashtag[]>([]);
@@ -131,17 +132,14 @@ export default function SearchPage() {
     }
   }, [activeTab]);
 
+  // Use debounced search query to reduce API calls
   useEffect(() => {
-    const delaySearch = setTimeout(() => {
-      if (activeTab === 'top') {
-        searchPosts(searchQuery);
-      } else if (activeTab === 'users') {
-        searchUsers(searchQuery);
-      }
-    }, 300);
-
-    return () => clearTimeout(delaySearch);
-  }, [searchQuery, activeTab]);
+    if (activeTab === 'top') {
+      searchPosts(debouncedSearchQuery);
+    } else if (activeTab === 'users') {
+      searchUsers(debouncedSearchQuery);
+    }
+  }, [debouncedSearchQuery, activeTab]);
 
   return (
     <div style={{ minHeight: '100vh', background: '#000', color: 'white' }}>
