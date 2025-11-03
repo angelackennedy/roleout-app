@@ -61,8 +61,14 @@ export default function VideoPost({ post, isActive, userId = null }: VideoPostPr
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  
+  const watchTimeRef = useRef(0);
+  const lastVisibleTimeRef = useRef<number | null>(null);
   const impressionTrackedRef = useRef(false);
-  const visibilityTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const hasLikedRef = useRef(false);
+  const hasCommentedRef = useRef(false);
+  const hasFollowedRef = useRef(false);
+
   const { isLiked, likeCount, toggleLike, isLoading } = usePostLike({
     postId: post.id,
     initialLikeCount: post.like_count,
@@ -72,6 +78,107 @@ export default function VideoPost({ post, isActive, userId = null }: VideoPostPr
   const username = hasNestedProfile(post) ? post.profiles.username : post.username;
   const displayName = hasNestedProfile(post) ? post.profiles.display_name : post.display_name;
   const avatarUrl = hasNestedProfile(post) ? post.profiles.avatar_url : post.avatar_url;
+
+  // Function to send impression with current engagement state
+  const sendImpression = async (additionalData: {
+    liked?: boolean;
+    commented?: boolean;
+    followed_creator?: boolean;
+  } = {}) => {
+    if (!userId) return;
+
+    try {
+      await fetch('/api/impressions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          post_id: post.id,
+          ms_watched: watchTimeRef.current,
+          liked: hasLikedRef.current || additionalData.liked || false,
+          commented: hasCommentedRef.current || additionalData.commented || false,
+          followed_creator: hasFollowedRef.current || additionalData.followed_creator || false,
+        }),
+      });
+    } catch (error) {
+      console.error('Failed to track impression:', error);
+    }
+  };
+
+  // Track watch time with IntersectionObserver
+  useEffect(() => {
+    if (!userId) return;
+
+    const container = containerRef.current;
+    if (!container) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          const now = Date.now();
+          
+          if (entry.intersectionRatio >= 0.5) {
+            lastVisibleTimeRef.current = now;
+            
+            if (!impressionTrackedRef.current) {
+              setTimeout(() => {
+                if (lastVisibleTimeRef.current !== null) {
+                  impressionTrackedRef.current = true;
+                  sendImpression();
+                }
+              }, 2000);
+            }
+          } else {
+            if (lastVisibleTimeRef.current !== null) {
+              const elapsed = now - lastVisibleTimeRef.current;
+              watchTimeRef.current += elapsed;
+              lastVisibleTimeRef.current = null;
+              
+              if (impressionTrackedRef.current) {
+                sendImpression();
+              }
+            }
+          }
+        });
+      },
+      { threshold: [0, 0.5, 1] }
+    );
+
+    observer.observe(container);
+
+    const watchTimeInterval = setInterval(() => {
+      if (lastVisibleTimeRef.current !== null) {
+        const now = Date.now();
+        const elapsed = now - lastVisibleTimeRef.current;
+        watchTimeRef.current += elapsed;
+        lastVisibleTimeRef.current = now;
+        
+        if (impressionTrackedRef.current && elapsed > 0) {
+          sendImpression();
+        }
+      }
+    }, 5000);
+
+    return () => {
+      if (lastVisibleTimeRef.current !== null) {
+        const elapsed = Date.now() - lastVisibleTimeRef.current;
+        watchTimeRef.current += elapsed;
+        
+        if (impressionTrackedRef.current) {
+          sendImpression();
+        }
+      }
+      clearInterval(watchTimeInterval);
+      observer.disconnect();
+    };
+  }, [userId, post.id]);
+
+  // Track engagement: likes
+  useEffect(() => {
+    if (isLiked && !hasLikedRef.current) {
+      hasLikedRef.current = true;
+      sendImpression({ liked: true });
+    }
+  }, [isLiked]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -83,54 +190,6 @@ export default function VideoPost({ post, isActive, userId = null }: VideoPostPr
       video.pause();
     }
   }, [isActive]);
-
-  useEffect(() => {
-    if (!userId || impressionTrackedRef.current) return;
-
-    const container = containerRef.current;
-    if (!container) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.intersectionRatio >= 0.5) {
-            if (visibilityTimerRef.current) {
-              clearTimeout(visibilityTimerRef.current);
-            }
-            visibilityTimerRef.current = setTimeout(async () => {
-              if (!impressionTrackedRef.current) {
-                impressionTrackedRef.current = true;
-                try {
-                  await fetch('/api/impressions', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ post_id: post.id }),
-                  });
-                } catch (error) {
-                  console.error('Failed to track impression:', error);
-                }
-              }
-            }, 2000);
-          } else {
-            if (visibilityTimerRef.current) {
-              clearTimeout(visibilityTimerRef.current);
-              visibilityTimerRef.current = null;
-            }
-          }
-        });
-      },
-      { threshold: [0, 0.5, 1] }
-    );
-
-    observer.observe(container);
-
-    return () => {
-      if (visibilityTimerRef.current) {
-        clearTimeout(visibilityTimerRef.current);
-      }
-      observer.disconnect();
-    };
-  }, [userId, post.id]);
 
   return (
     <div 
