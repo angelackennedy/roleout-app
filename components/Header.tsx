@@ -22,22 +22,32 @@ export default function Header() {
         </h1>
 
         <div className="flex items-center gap-4 text-sm">
-          <Link href="/feed" className="hover:text-gray-400">
-            Feed
+          <Link href="/" className="hover:text-gray-400">
+            For You
           </Link>
 
           {user && (
-            <Link href="/upload" className="hover:text-gray-400">
-              Upload
-            </Link>
+            <>
+              <Link href="/following" className="hover:text-gray-400">
+                Following
+              </Link>
+              <Link href="/upload" className="hover:text-gray-400">
+                Upload
+              </Link>
+            </>
           )}
 
           {user ? (
-            <button onClick={signOut} className="hover:text-gray-400">
-              Sign Out
-            </button>
+            <>
+              <Link href="/profile" className="hover:text-gray-400">
+                Profile
+              </Link>
+              <button onClick={signOut} className="hover:text-gray-400">
+                Sign Out
+              </button>
+            </>
           ) : (
-            <Link href="/auth/signin" className="hover:text-gray-400">
+            <Link href="/auth/login" className="hover:text-gray-400">
               Login
             </Link>
           )}

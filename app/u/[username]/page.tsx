@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth-context';
+import { useFollow } from '@/lib/hooks/useFollow';
 import Link from 'next/link';
 
 type Profile = {
@@ -23,6 +24,11 @@ export default function UserProfilePage() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const { isFollowing, isLoading: followLoading, followersCount, followingCount, toggleFollow } = useFollow({
+    targetUserId: profile?.id || null,
+    currentUserId: user?.id || null,
+  });
 
   useEffect(() => {
     if (username) {
@@ -179,6 +185,54 @@ export default function UserProfilePage() {
             }}>
               {profile.bio}
             </p>
+          )}
+
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 24,
+            marginBottom: 24,
+          }}>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: 20, fontWeight: 700, color: 'white' }}>
+                {followersCount}
+              </div>
+              <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)' }}>
+                Followers
+              </div>
+            </div>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: 20, fontWeight: 700, color: 'white' }}>
+                {followingCount}
+              </div>
+              <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)' }}>
+                Following
+              </div>
+            </div>
+          </div>
+
+          {user && user.id !== profile.id && (
+            <button
+              onClick={toggleFollow}
+              disabled={followLoading}
+              style={{
+                background: isFollowing
+                  ? 'rgba(255,255,255,0.1)'
+                  : 'linear-gradient(135deg, rgba(212,175,55,0.8) 0%, rgba(212,175,55,0.6) 100%)',
+                border: isFollowing ? '2px solid rgba(255,255,255,0.2)' : 'none',
+                borderRadius: 24,
+                padding: '12px 32px',
+                color: 'white',
+                fontSize: 14,
+                fontWeight: 600,
+                cursor: followLoading ? 'not-allowed' : 'pointer',
+                opacity: followLoading ? 0.6 : 1,
+                marginBottom: 20,
+              }}
+            >
+              {followLoading ? 'Loading...' : isFollowing ? 'Unfollow' : 'Follow'}
+            </button>
           )}
 
           <div style={{

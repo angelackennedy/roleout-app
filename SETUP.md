@@ -81,6 +81,17 @@ Creates the `post_comments` table for comments:
 **Security**: All functions verify authentication and prevent user impersonation.
 **Includes realtime subscriptions** - Comments appear instantly across all clients!
 
+### 8. Follows Table
+File: `supabase-follows-schema.sql`
+
+Creates the `follows` table for user follow relationships:
+- Composite primary key (follower_id, following_id)
+- CHECK constraint to prevent self-follows
+- Indexes on follower_id, following_id, and created_at
+- RLS policies: Anyone can view, authenticated users can follow/unfollow
+
+**Powers the Following feed** - See posts only from users you follow!
+
 ## Storage Buckets Summary
 
 After running all SQL files, you should have these buckets:
@@ -109,11 +120,14 @@ Once setup is complete, you can:
 1. **Sign up / Sign in** - Magic link or password authentication
 2. **Edit profile** - Upload avatar, set display name at `/profile`
 3. **Upload videos** - Go to `/upload` to post videos with captions and hashtags
-4. **Browse feed** - Vertical TikTok-style feed on home page (`/`)
+4. **Browse feeds**:
+   - **For You** (`/`) - Global feed with all posts, ordered by recency
+   - **Following** (`/following`) - Posts only from users you follow
 5. **Like posts** - Click heart button (optimistic UI, instant feedback)
 6. **Comment on posts** - Click comment button to open drawer, add comments with realtime updates
-7. **View profiles** - Visit `/u/[username]` to see user profiles
-8. **Live streaming** - Join sessions at `/live/[sessionId]` with WebRTC
+7. **Follow users** - Visit `/u/[username]` and click Follow/Unfollow button
+8. **View profiles** - See follower/following counts, bio, and join date
+9. **Live streaming** - Join sessions at `/live/[sessionId]` with WebRTC
 
 ## Troubleshooting
 
