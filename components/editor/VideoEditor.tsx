@@ -189,6 +189,49 @@ export function VideoEditor({ userId }: VideoEditorProps) {
     }
   };
 
+  const splitClip = (clipId: string, splitTime: number) => {
+    setProject(prev => {
+      const newTracks = prev.tracks.map(track => {
+        const clipIndex = track.clips.findIndex(c => c.id === clipId);
+        if (clipIndex === -1) return track;
+
+        const clip = track.clips[clipIndex];
+        const relativeTime = splitTime - clip.startTime;
+        
+        // Create two new clips from the split
+        const firstClip: Clip = {
+          ...clip,
+          id: `${clip.id}-part1`,
+          duration: relativeTime,
+          trimEnd: clip.trimStart + relativeTime,
+        };
+        
+        const secondClip: Clip = {
+          ...clip,
+          id: `${clip.id}-part2`,
+          startTime: splitTime,
+          duration: clip.duration - relativeTime,
+          trimStart: clip.trimStart + relativeTime,
+        };
+
+        // Replace the original clip with the two new clips
+        const newClips = [...track.clips];
+        newClips.splice(clipIndex, 1, firstClip, secondClip);
+        
+        return {
+          ...track,
+          clips: newClips,
+        };
+      });
+
+      return {
+        ...prev,
+        tracks: newTracks,
+      };
+    });
+    setSelectedClip(null);
+  };
+
   return (
     <div style={{
       height: '100vh',
@@ -275,8 +318,10 @@ export function VideoEditor({ userId }: VideoEditorProps) {
               <div style={{ flex: 1, overflow: 'auto' }}>
                 <Inspector
                   selectedClip={selectedClip}
+                  currentTime={currentTime}
                   onUpdateClip={updateClip}
                   onDeleteClip={deleteClip}
+                  onSplitClip={splitClip}
                 />
               </div>
             </div>

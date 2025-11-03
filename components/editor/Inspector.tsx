@@ -4,11 +4,13 @@ import { Clip } from './types';
 
 interface InspectorProps {
   selectedClip: Clip | null;
+  currentTime: number;
   onUpdateClip: (clipId: string, updates: Partial<Clip>) => void;
   onDeleteClip: (clipId: string) => void;
+  onSplitClip?: (clipId: string, splitTime: number) => void;
 }
 
-export function Inspector({ selectedClip, onUpdateClip, onDeleteClip }: InspectorProps) {
+export function Inspector({ selectedClip, currentTime, onUpdateClip, onDeleteClip, onSplitClip }: InspectorProps) {
   if (!selectedClip) {
     return (
       <div style={{
@@ -273,6 +275,27 @@ export function Inspector({ selectedClip, onUpdateClip, onDeleteClip }: Inspecto
             style={{ width: '100%' }}
           />
         </div>
+
+        {/* Split Button */}
+        {onSplitClip && currentTime > selectedClip.startTime && currentTime < selectedClip.startTime + selectedClip.duration && (
+          <button
+            onClick={() => onSplitClip(selectedClip.id, currentTime)}
+            style={{
+              width: '100%',
+              padding: '10px',
+              background: 'rgba(212,175,55,0.2)',
+              border: '1px solid rgba(212,175,55,0.4)',
+              borderRadius: 6,
+              color: 'rgba(212,175,55,0.9)',
+              fontSize: 13,
+              fontWeight: 500,
+              cursor: 'pointer',
+              marginBottom: 8,
+            }}
+          >
+            ✂️ Split at Playhead
+          </button>
+        )}
 
         {/* Delete Button */}
         <button
