@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { usePostLike } from '@/lib/hooks/usePostLike';
 import { CommentsDrawer } from '@/components/CommentsDrawer';
+import { ReportDialog } from '@/components/ReportDialog';
 
 type PostWithNested = {
   id: string;
@@ -55,6 +56,8 @@ function hasNestedProfile(post: Post): post is PostWithNested {
 export default function VideoPost({ post, isActive, userId = null }: VideoPostProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [commentsOpen, setCommentsOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const { isLiked, likeCount, toggleLike, isLoading } = usePostLike({
     postId: post.id,
     initialLikeCount: post.like_count,
@@ -257,10 +260,75 @@ export default function VideoPost({ post, isActive, userId = null }: VideoPostPr
           flexDirection: 'column',
         }}>
           <span>↗️</span>
-          <span style={{ fontSize: 12, fontWeight: 600, marginTop: 4 }}>
+          <span style={{ fontSize: 12, fontWeight: 600, marginTop: 4, color: 'white' }}>
             {post.share_count}
           </span>
         </button>
+
+        <div style={{ position: 'relative' }}>
+          <button 
+            onClick={() => setMenuOpen(!menuOpen)}
+            style={{
+              background: 'rgba(0,0,0,0.5)',
+              border: '2px solid white',
+              borderRadius: '50%',
+              width: 56,
+              height: 56,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: 24,
+              cursor: 'pointer',
+              color: 'white',
+            }}
+          >
+            ⋯
+          </button>
+
+          {menuOpen && (
+            <div
+              style={{
+                position: 'absolute',
+                right: 64,
+                top: 0,
+                background: 'linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%)',
+                borderRadius: 12,
+                padding: 8,
+                minWidth: 150,
+                border: '2px solid rgba(212,175,55,0.3)',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
+              }}
+            >
+              <button
+                onClick={() => {
+                  setMenuOpen(false);
+                  setReportOpen(true);
+                }}
+                style={{
+                  width: '100%',
+                  padding: 12,
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'white',
+                  fontSize: 14,
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  borderRadius: 8,
+                  transition: 'background 0.2s',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'rgba(212,175,55,0.2)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'transparent';
+                }}
+              >
+                🚩 Report
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       <Link
@@ -292,6 +360,13 @@ export default function VideoPost({ post, isActive, userId = null }: VideoPostPr
         userId={userId}
         isOpen={commentsOpen}
         onClose={() => setCommentsOpen(false)}
+      />
+
+      <ReportDialog
+        postId={post.id}
+        userId={userId}
+        isOpen={reportOpen}
+        onClose={() => setReportOpen(false)}
       />
     </div>
   );
