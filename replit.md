@@ -4,6 +4,23 @@
 RollCall is a video-based social platform focused on authenticity and transparent moderation. Built with Next.js 14, TypeScript, Supabase, and Tailwind CSS.
 
 ## Recent Changes
+- **2025-11-03**: Drafts System with Autosave
+  - Implemented 2-tab upload UI (New/Drafts) with visual draft grid
+  - Added autosave with 2-second debounce and "Saved" indicator
+  - Hashtag extraction from caption with trending tags suggestions (top 10)
+  - Video cover frame picker with timeline scrubbing
+  - Draft-to-post publishing flow with automatic draft cleanup
+  - Created `post_drafts` table with RLS policies and updated_at trigger
+  - Built reusable hooks: `use-drafts` and `use-trending-hashtags`
+
+- **2025-11-03**: Algorithmic For You Feed
+  - Implemented personalized ranking with multi-factor scoring
+  - Tracks engagement: watch time, likes, comments, follows
+  - Recency decay, overexposure penalty, creator diversity
+  - Cold start boost for new posts, view count tracking
+  - Real-time analytics with post_impressions table
+  - RPC function `get_ranked_feed` with SECURITY DEFINER
+
 - **2025-10-29**: Initial MVP implementation
   - Set up Next.js 14 with App Router, TypeScript, and Tailwind CSS
   - Integrated Supabase for auth, database, and storage
@@ -22,17 +39,21 @@ RollCall is a video-based social platform focused on authenticity and transparen
 
 ### Key Features
 1. **Authentication** - Supabase Auth with email/password
-2. **Video Feed** - Browse posts with engagement metrics
-3. **Video Upload** - Client-side trimming (≤60s), Supabase Storage
-4. **Post Page** - Video playback, likes, comments, flagging
-5. **User Profiles** - User info and posted videos
-6. **Moderation Panel (FA³)** - Public transparency log, community flags
-7. **Wallet Placeholder (FA⁴)** - UI shell for crypto integration
-8. **Metrics Placeholder (FA⁵)** - Analytics dashboard shell
+2. **Algorithmic Feed** - Personalized For You feed with engagement-based ranking
+3. **Drafts System** - 2-tab upload with autosave, hashtag helpers, cover picker
+4. **Video Upload** - Client-side trimming (≤60s), Supabase Storage
+5. **Post Page** - Video playback, likes, comments, flagging
+6. **User Profiles** - User info and posted videos
+7. **Analytics** - Real-time view tracking, engagement metrics
+8. **Moderation Panel (FA³)** - Public transparency log, community flags
+9. **Wallet Placeholder (FA⁴)** - UI shell for crypto integration
+10. **Metrics Placeholder (FA⁵)** - Analytics dashboard shell
 
 ### Database Schema
 - `profiles` - User profiles (extends auth.users)
 - `posts` - Video posts with engagement counts
+- `post_drafts` - Draft posts with autosave (new)
+- `post_impressions` - Analytics tracking for algorithmic feed (new)
 - `likes` - Post likes (with triggers for count updates)
 - `comments` - Post comments (with triggers for count updates)
 - `moderation_actions` - Public moderation log
