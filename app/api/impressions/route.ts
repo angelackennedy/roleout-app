@@ -16,7 +16,13 @@ export async function POST(request: NextRequest) {
     }
 
     // Parse request body
-    const { post_id } = await request.json();
+    const { 
+      post_id, 
+      ms_watched = 0,
+      liked = false,
+      commented = false,
+      followed_creator = false
+    } = await request.json();
 
     if (!post_id) {
       return NextResponse.json(
@@ -25,22 +31,56 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Insert impression (unique constraint prevents duplicates per user per day)
-    const { error: insertError } = await supabase
+    // Check if impression exists for today
+    const today = new Date().toISOString().split('T')[0];
+    const { data: existingImpression } = await supabase
       .from('post_impressions')
-      .insert({
-        post_id,
-        user_id: user.id,
-        created_at: new Date().toISOString()
-      });
+      .select('id, ms_watched, liked, commented, followed_creator')
+      .eq('post_id', post_id)
+      .eq('user_id', user.id)
+      .gte('created_at', today)
+      .single();
 
-    // Ignore unique constraint violations (user already viewed today)
-    if (insertError && !insertError.message.includes('duplicate key')) {
-      console.error('Error inserting impression:', insertError);
-      return NextResponse.json(
-        { error: 'Failed to track impression' },
-        { status: 500 }
-      );
+    if (existingImpression) {
+      // Update existing impression (accumulate watch time, keep engagement flags)
+      const { error: updateError } = await supabase
+        .from('post_impressions')
+        .update({
+          ms_watched: existingImpression.ms_watched + ms_watched,
+          liked: existingImpression.liked || liked,
+          commented: existingImpression.commented || commented,
+          followed_creator: existingImpression.followed_creator || followed_creator,
+        })
+        .eq('id', existingImpression.id);
+
+      if (updateError) {
+        console.error('Error updating impression:', updateError);
+        return NextResponse.json(
+          { error: 'Failed to update impression' },
+          { status: 500 }
+        );
+      }
+    } else {
+      // Insert new impression
+      const { error: insertError } = await supabase
+        .from('post_impressions')
+        .insert({
+          post_id,
+          user_id: user.id,
+          ms_watched,
+          liked,
+          commented,
+          followed_creator,
+          created_at: new Date().toISOString()
+        });
+
+      if (insertError) {
+        console.error('Error inserting impression:', insertError);
+        return NextResponse.json(
+          { error: 'Failed to track impression' },
+          { status: 500 }
+        );
+      }
     }
 
     return NextResponse.json({ success: true });
