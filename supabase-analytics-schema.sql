@@ -13,9 +13,13 @@ CREATE TABLE public.post_impressions (
   liked BOOLEAN DEFAULT false,
   commented BOOLEAN DEFAULT false,
   followed_creator BOOLEAN DEFAULT false,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  UNIQUE(post_id, user_id, DATE(created_at))
+  created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Create unique index to prevent duplicate impressions per user per day
+-- Note: Using expression in index (not table constraint) is required for DATE()
+CREATE UNIQUE INDEX post_impressions_user_day_unique
+  ON public.post_impressions(post_id, user_id, (DATE(created_at)));
 
 -- Create indexes for performance
 CREATE INDEX post_impressions_user_created_idx 

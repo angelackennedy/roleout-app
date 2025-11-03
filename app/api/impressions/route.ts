@@ -42,11 +42,11 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (existingImpression) {
-      // Update existing impression (accumulate watch time, keep engagement flags)
+      // Update existing impression (set watch time to new value, OR engagement flags)
       const { error: updateError } = await supabase
         .from('post_impressions')
         .update({
-          ms_watched: existingImpression.ms_watched + ms_watched,
+          ms_watched: ms_watched,
           liked: existingImpression.liked || liked,
           commented: existingImpression.commented || commented,
           followed_creator: existingImpression.followed_creator || followed_creator,

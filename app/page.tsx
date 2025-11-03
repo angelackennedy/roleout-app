@@ -349,7 +349,7 @@ export default function Home() {
 
       if (fullPosts && fullPosts.length > 0) {
         const orderedPosts = postIds
-          .map((id: string) => fullPosts.find(p => p.id === id))
+          .map((id: string) => fullPosts.find((p: Post) => p.id === id))
           .filter((p): p is Post => Boolean(p));
         
         setPosts((prev) => pageNum === 0 ? orderedPosts : [...prev, ...orderedPosts]);
