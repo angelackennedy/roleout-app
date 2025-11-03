@@ -13,6 +13,36 @@ interface AuthContextType {
   signOut: () => Promise<void>;
 }
 
+async function ensureProfile(userId: string) {
+  try {
+    const { data: existingProfile } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (!existingProfile) {
+      const shortId = Math.random().toString(36).substring(2, 10);
+      const username = `user-${shortId}`;
+      
+      const { error } = await supabase
+        .from('profiles')
+        .insert({
+          id: userId,
+          username,
+        });
+
+      if (error && error.code !== '23505') {
+        console.error('Error creating profile:', error);
+      } else {
+        console.log('Profile created:', username);
+      }
+    }
+  } catch (err) {
+    console.error('Error ensuring profile:', err);
+  }
+}
+
 const AuthContext = createContext<AuthContextType>({
   user: null,
   session: null,
@@ -39,6 +69,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
+      if (session?.user) {
+        ensureProfile(session.user.id);
+      }
       setLoading(false);
     });
 
@@ -47,6 +80,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       setUser(session?.user ?? null);
+      if (session?.user) {
+        ensureProfile(session.user.id);
+      }
       setLoading(false);
     });
 
