@@ -78,6 +78,9 @@ export default function LiveReactions({ sessionId, userId }: LiveReactionsProps)
     }
   };
 
+  // Track optimistic reactions to prevent double-counting
+  const optimisticReactionsRef = useRef<Set<string>>(new Set());
+
   // Send a reaction
   const sendReaction = async (emoji: Emoji) => {
     if (!userId) {
@@ -94,6 +97,10 @@ export default function LiveReactions({ sessionId, userId }: LiveReactionsProps)
       console.log('Throttled: too many reactions');
       return;
     }
+
+    // Create temporary ID for optimistic update tracking
+    const tempId = `${userId}-${emoji}-${now}`;
+    optimisticReactionsRef.current.add(tempId);
 
     // Optimistic UI: increment counter immediately
     setCounts((prev) => ({
@@ -123,6 +130,7 @@ export default function LiveReactions({ sessionId, userId }: LiveReactionsProps)
           ...prev,
           [emoji]: Math.max(prev[emoji] - 1, 0),
         }));
+        optimisticReactionsRef.current.delete(tempId);
       }
     } catch (err) {
       console.error('Unexpected error sending reaction:', err);
@@ -131,6 +139,7 @@ export default function LiveReactions({ sessionId, userId }: LiveReactionsProps)
         ...prev,
         [emoji]: Math.max(prev[emoji] - 1, 0),
       }));
+      optimisticReactionsRef.current.delete(tempId);
     }
   };
 
@@ -176,18 +185,23 @@ export default function LiveReactions({ sessionId, userId }: LiveReactionsProps)
           console.log('New reaction received:', payload);
           const newReaction = payload.new as LiveReaction;
           
-          // Increment counter (skip if it was our optimistic update)
-          // Note: This is safe because optimistic UI already incremented
-          // We can add de-duplication logic if needed
+          // Skip if this was our own optimistic update
+          if (newReaction.user_id === userId) {
+            // Just clean up the optimistic tracking set
+            setTimeout(() => {
+              optimisticReactionsRef.current.clear();
+            }, 1000);
+            return;
+          }
+
+          // Increment counter for reactions from other users
           setCounts((prev) => ({
             ...prev,
             [newReaction.emoji]: prev[newReaction.emoji] + 1,
           }));
 
           // Show particle animation for other users
-          if (newReaction.user_id !== userId) {
-            addParticle(newReaction.emoji);
-          }
+          addParticle(newReaction.emoji);
         }
       )
       .subscribe();
