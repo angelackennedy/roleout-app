@@ -24,21 +24,23 @@ export function useLiveChat({ sessionId, userId, isLive }: UseLiveChatOptions) {
   const channelRef = useRef<RealtimeChannel | null>(null);
   const lastSendTimeRef = useRef<number>(0);
 
-  // Fetch initial messages (last 100)
+  // Fetch initial messages (last 100, most recent)
   const fetchMessages = async () => {
     try {
       const { data, error } = await supabase
         .from('live_chat')
         .select('*')
         .eq('session_id', sessionId)
-        .order('created_at', { ascending: true })
+        .order('created_at', { ascending: false })
         .limit(100);
 
       if (error) {
         console.error('Error fetching messages:', error);
       } else {
-        setMessages(data || []);
-        setMessageCount(data?.length || 0);
+        // Reverse to show oldest first, newest last (chronological order)
+        const messagesInOrder = (data || []).reverse();
+        setMessages(messagesInOrder);
+        setMessageCount(messagesInOrder.length);
       }
     } catch (err) {
       console.error('Unexpected error fetching messages:', err);

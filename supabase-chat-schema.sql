@@ -21,11 +21,10 @@ FOR INSERT
 TO authenticated
 WITH CHECK (auth.uid() = user_id);
 
--- Policy 2: Anyone can view messages for any session (read-only for viewers)
+-- Policy 2: Anyone can view messages for any session (read-only for viewers, including anon)
 CREATE POLICY "Anyone can view messages"
 ON public.live_chat
 FOR SELECT
-TO authenticated
 USING (true);
 
 -- Policy 3: Users can only update their own messages (optional, for future edit feature)
