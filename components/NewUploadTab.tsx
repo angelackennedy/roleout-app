@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useTrendingHashtags } from '@/lib/use-trending-hashtags';
 import { Draft } from '@/lib/use-drafts';
+import { processVideo, ProcessingProgress } from '@/lib/video-processor';
 
 interface NewUploadTabProps {
   userId: string;
@@ -56,13 +57,17 @@ export function NewUploadTab({
   const [preview, setPreview] = useState<string>(initialDraft?.video_url || '');
   const [caption, setCaption] = useState(initialDraft?.caption || '');
   const [uploading, setUploading] = useState(false);
-  const [progress, setProgress] = useState(0);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [processingProgress, setProcessingProgress] = useState<ProcessingProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [currentDraft, setCurrentDraft] = useState<Draft | null>(initialDraft || null);
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [coverUrl, setCoverUrl] = useState<string | null>(initialDraft?.cover_url || null);
   const [showCoverPicker, setShowCoverPicker] = useState(false);
   const [coverTime, setCoverTime] = useState(1);
+  const [processedVideo, setProcessedVideo] = useState<Blob | null>(null);
+  const [processedThumbnail, setProcessedThumbnail] = useState<Blob | null>(null);
+  const [skipProcessing, setSkipProcessing] = useState(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -84,6 +89,8 @@ export function NewUploadTab({
     const previewUrl = URL.createObjectURL(selectedFile);
     setPreview(previewUrl);
     setError(null);
+    setProcessedVideo(null);
+    setProcessedThumbnail(null);
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -179,59 +186,121 @@ export function NewUploadTab({
   }, [caption, saveDraft]);
 
   const handlePublish = async () => {
-    if (!preview && !currentDraft?.video_url) {
+    if (!preview && !currentDraft?.video_url && !file) {
       setError('Please select a video');
       return;
     }
 
     setUploading(true);
-    setProgress(0);
+    setUploadProgress(0);
     setError(null);
 
     try {
-      let videoUrl = currentDraft?.video_url || preview;
-      let finalCoverUrl = currentDraft?.cover_url || coverUrl;
+      let videoToUpload: File | Blob | null = file;
+      let thumbnailToUpload: Blob | null = null;
 
-      if (file && !currentDraft?.video_url) {
-        const fileExt = file.name.split('.').pop();
-        const timestamp = Date.now();
-        const videoPath = `${userId}/${timestamp}.${fileExt}`;
+      if (file && !skipProcessing && !processedVideo) {
+        setProcessingProgress({ stage: 'loading', progress: 0, message: 'Starting processing...' });
 
-        const { error: uploadError } = await supabase.storage
-          .from('posts')
-          .upload(videoPath, file, { cacheControl: '3600', upsert: false });
+        const result = await processVideo(file, (progress) => {
+          setProcessingProgress(progress);
+        });
 
-        if (uploadError) throw uploadError;
-
-        const { data: urlData } = supabase.storage.from('posts').getPublicUrl(videoPath);
-        videoUrl = urlData.publicUrl;
-        setProgress(50);
+        if (result.video && result.thumbnail) {
+          videoToUpload = result.video;
+          thumbnailToUpload = result.thumbnail;
+          setProcessedVideo(result.video);
+          setProcessedThumbnail(result.thumbnail);
+        } else {
+          videoToUpload = file;
+        }
+      } else if (processedVideo) {
+        videoToUpload = processedVideo;
+        thumbnailToUpload = processedThumbnail;
       }
+
+      setProcessingProgress(null);
+      setUploadProgress(5);
 
       const hashtags = extractHashtags(caption);
 
-      const { error: dbError } = await supabase
+      const { data: postData, error: postError } = await supabase
         .from('posts')
         .insert({
           user_id: userId,
-          video_url: videoUrl,
-          cover_url: finalCoverUrl,
           caption: caption.trim() || null,
           hashtags: hashtags.length > 0 ? hashtags : null,
+        })
+        .select('id')
+        .single();
+
+      if (postError) throw postError;
+
+      const postId = postData.id;
+
+      setUploadProgress(20);
+
+      const videoPath = `${userId}/${postId}.mp4`;
+      const videoBlob = videoToUpload || file;
+      
+      if (!videoBlob) throw new Error('No video to upload');
+
+      const { error: videoError } = await supabase.storage
+        .from('posts')
+        .upload(videoPath, videoBlob, {
+          contentType: 'video/mp4',
+          cacheControl: '3600',
+          upsert: false,
         });
 
-      if (dbError) throw dbError;
+      if (videoError) throw videoError;
+
+      setUploadProgress(60);
+
+      const { data: videoUrlData } = supabase.storage.from('posts').getPublicUrl(videoPath);
+      const videoUrl = videoUrlData.publicUrl;
+
+      let coverUrl: string | null = null;
+
+      if (thumbnailToUpload) {
+        const coverPath = `${userId}/${postId}.jpg`;
+        const { error: coverError } = await supabase.storage
+          .from('posts')
+          .upload(coverPath, thumbnailToUpload, {
+            contentType: 'image/jpeg',
+            cacheControl: '3600',
+            upsert: false,
+          });
+
+        if (!coverError) {
+          const { data: coverUrlData } = supabase.storage.from('posts').getPublicUrl(coverPath);
+          coverUrl = coverUrlData.publicUrl;
+        }
+      }
+
+      setUploadProgress(90);
+
+      const { error: updateError } = await supabase
+        .from('posts')
+        .update({
+          video_url: videoUrl,
+          cover_url: coverUrl,
+        })
+        .eq('id', postId);
+
+      if (updateError) throw updateError;
 
       if (currentDraft) {
         await supabase.from('post_drafts').delete().eq('id', currentDraft.id);
       }
 
-      setProgress(100);
+      setUploadProgress(100);
       onPublish();
     } catch (err: any) {
       console.error('Publish error:', err);
       setError(err.message || 'Publish failed');
-      setProgress(0);
+      setUploadProgress(0);
+      setProcessingProgress(null);
     } finally {
       setUploading(false);
     }
@@ -269,6 +338,9 @@ export function NewUploadTab({
 
   const hashtags = extractHashtags(caption);
 
+  const isProcessing = processingProgress !== null && processingProgress.stage !== 'complete';
+  const canSkipProcessing = isProcessing && processingProgress?.progress < 50;
+
   return (
     <div style={{ padding: 20 }}>
       {error && (
@@ -282,6 +354,58 @@ export function NewUploadTab({
           fontSize: 14,
         }}>
           {error}
+        </div>
+      )}
+
+      {processingProgress && (
+        <div style={{
+          background: 'rgba(212,175,55,0.1)',
+          border: '1px solid rgba(212,175,55,0.3)',
+          borderRadius: 8,
+          padding: 16,
+          marginBottom: 20,
+        }}>
+          <div style={{
+            fontSize: 14,
+            color: 'rgba(212,175,55,0.9)',
+            marginBottom: 8,
+          }}>
+            {processingProgress.message}
+          </div>
+          <div style={{
+            width: '100%',
+            height: 8,
+            background: 'rgba(255,255,255,0.1)',
+            borderRadius: 4,
+            overflow: 'hidden',
+          }}>
+            <div style={{
+              width: `${processingProgress.progress}%`,
+              height: '100%',
+              background: 'linear-gradient(135deg, rgba(212,175,55,0.8) 0%, rgba(255,215,0,0.6) 100%)',
+              transition: 'width 0.3s ease',
+            }} />
+          </div>
+          {canSkipProcessing && (
+            <button
+              onClick={() => {
+                setSkipProcessing(true);
+                setProcessingProgress(null);
+              }}
+              style={{
+                marginTop: 12,
+                padding: '8px 16px',
+                background: 'rgba(255,255,255,0.1)',
+                border: '1px solid rgba(255,255,255,0.3)',
+                borderRadius: 6,
+                color: 'rgba(255,255,255,0.8)',
+                fontSize: 12,
+                cursor: 'pointer',
+              }}
+            >
+              Skip Processing
+            </button>
+          )}
         </div>
       )}
 
@@ -502,13 +626,44 @@ export function NewUploadTab({
             </div>
           )}
 
+          {uploading && uploadProgress > 0 && (
+            <div style={{
+              marginBottom: 16,
+              padding: 12,
+              background: 'rgba(255,255,255,0.05)',
+              borderRadius: 8,
+            }}>
+              <div style={{
+                fontSize: 14,
+                color: 'rgba(255,255,255,0.8)',
+                marginBottom: 8,
+              }}>
+                Uploading... {uploadProgress}%
+              </div>
+              <div style={{
+                width: '100%',
+                height: 8,
+                background: 'rgba(255,255,255,0.1)',
+                borderRadius: 4,
+                overflow: 'hidden',
+              }}>
+                <div style={{
+                  width: `${uploadProgress}%`,
+                  height: '100%',
+                  background: 'linear-gradient(135deg, rgba(212,175,55,0.8) 0%, rgba(255,215,0,0.6) 100%)',
+                  transition: 'width 0.3s ease',
+                }} />
+              </div>
+            </div>
+          )}
+
           <button
             onClick={handlePublish}
-            disabled={uploading}
+            disabled={uploading || isProcessing}
             style={{
               width: '100%',
               padding: 16,
-              background: uploading
+              background: (uploading || isProcessing)
                 ? 'rgba(255,255,255,0.1)'
                 : 'linear-gradient(135deg, rgba(212,175,55,0.8) 0%, rgba(255,215,0,0.6) 100%)',
               border: 'none',
@@ -516,10 +671,10 @@ export function NewUploadTab({
               color: 'white',
               fontSize: 16,
               fontWeight: 600,
-              cursor: uploading ? 'not-allowed' : 'pointer',
+              cursor: (uploading || isProcessing) ? 'not-allowed' : 'pointer',
             }}
           >
-            {uploading ? `Publishing... ${progress}%` : 'Publish'}
+            {isProcessing ? 'Processing...' : uploading ? `Publishing... ${uploadProgress}%` : 'Publish'}
           </button>
         </div>
       )}
