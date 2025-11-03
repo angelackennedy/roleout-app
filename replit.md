@@ -4,6 +4,15 @@
 RollCall is a video-based social platform focused on authenticity and transparent moderation. Built with Next.js 14, TypeScript, Supabase, and Tailwind CSS.
 
 ## Recent Changes
+- **2025-11-03**: Client-Side Video Processing
+  - Integrated ffmpeg.wasm for automatic video processing
+  - Thumbnail extraction from first keyframe
+  - Video transcoding to H.264/baseline for compatibility
+  - Progress UI with "Processing..." and "Uploading..." indicators
+  - Skip processing button if taking too long (< 50% progress)
+  - Standardized file naming: `{userId}/{postId}.mp4` and `.jpg`
+  - Fallback to original video if processing fails
+
 - **2025-11-03**: Drafts System with Autosave
   - Implemented 2-tab upload UI (New/Drafts) with visual draft grid
   - Added autosave with 2-second debounce and "Saved" indicator

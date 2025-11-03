@@ -195,6 +195,44 @@ Creates a comprehensive drafts system with autosave capabilities:
 4. User can pick cover frame by scrubbing video with range slider
 5. Publishing creates post from draft data and deletes draft record
 
+## Video Processing (Client-Side)
+
+The upload system includes automatic client-side video processing using ffmpeg.wasm:
+
+**Features:**
+- **Thumbnail Extraction:** Extracts first keyframe as cover image automatically
+- **Video Transcoding:** Normalizes videos to H.264/baseline for maximum compatibility
+- **Fallback Support:** If processing fails or is skipped, original video is uploaded
+- **Progress Tracking:** Shows detailed progress for both processing and uploading
+- **Skip Option:** Users can skip processing if it's taking too long (< 50% progress)
+
+**File Naming Convention:**
+- Processed videos: `posts/{userId}/{postId}.mp4`
+- Thumbnails: `posts/{userId}/{postId}.jpg`
+- Uses post ID for unique, predictable file names
+
+**Processing Flow:**
+1. User selects video → ffmpeg.wasm loads in background
+2. Click Publish → Processing starts (thumbnail extraction + transcoding)
+3. Progress UI shows: "Loading processor → Extracting thumbnail → Transcoding"
+4. Post created in database first (to get post_id)
+5. Processed video uploaded to `{userId}/{postId}.mp4`
+6. Thumbnail uploaded to `{userId}/{postId}.jpg`
+7. Post updated with final URLs
+8. Draft deleted if publishing from draft
+
+**Technical Details:**
+- Uses ffmpeg.wasm 0.12.6 (loaded from CDN)
+- H.264 baseline profile, level 3.0 for broad device compatibility
+- AAC audio at 128k bitrate
+- Faststart flag for progressive streaming
+- CRF 23 for quality/size balance
+
+**Skip Processing:**
+- Button appears if processing takes > 5 seconds
+- Only available before 50% progress
+- Falls back to uploading original video file
+
 ### 14. RLS and Performance Audit (IMPORTANT)
 File: `supabase-rls-indexes-audit.sql`
 
