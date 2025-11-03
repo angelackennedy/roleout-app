@@ -82,6 +82,9 @@ export default function Header() {
               <Link href="/creator" className="hover:text-gray-400">
                 Analytics
               </Link>
+              <Link href="/sounds" className="hover:text-gray-400">
+                Sounds
+              </Link>
               <button onClick={signOut} className="hover:text-gray-400">
                 Sign Out
               </button>
