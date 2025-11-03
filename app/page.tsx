@@ -283,21 +283,54 @@ export default function Home() {
   const fetchPosts = async (pageNum: number) => {
     setLoading(true);
     try {
-      const from = pageNum * POSTS_PER_PAGE;
-      const to = from + POSTS_PER_PAGE - 1;
+      if (!user) {
+        const { data, error: fetchError } = await supabase
+          .from('posts')
+          .select(`
+            *,
+            profiles (
+              id,
+              username,
+              display_name,
+              avatar_url
+            )
+          `)
+          .order('created_at', { ascending: false })
+          .range(pageNum * POSTS_PER_PAGE, (pageNum + 1) * POSTS_PER_PAGE - 1);
 
-      let reportedPostIds: string[] = [];
-      
-      if (user) {
-        const { data: reportedPosts } = await supabase
-          .from('reports')
-          .select('post_id')
-          .eq('reporter_id', user.id);
+        if (fetchError) throw fetchError;
+
+        if (data && data.length > 0) {
+          setPosts((prev) => pageNum === 0 ? data : [...prev, ...data]);
+          setHasMore(data.length === POSTS_PER_PAGE);
+        } else {
+          setHasMore(false);
+        }
         
-        reportedPostIds = reportedPosts?.map(r => r.post_id) || [];
+        setLoading(false);
+        return;
       }
 
-      let query = supabase
+      const { data: rankedPosts, error: rankError } = await supabase
+        .rpc('get_ranked_feed', {
+          p_user_id: user.id,
+          p_limit: POSTS_PER_PAGE,
+          p_offset: pageNum * POSTS_PER_PAGE
+        });
+
+      if (rankError) {
+        throw rankError;
+      }
+
+      if (!rankedPosts || rankedPosts.length === 0) {
+        setHasMore(false);
+        setLoading(false);
+        return;
+      }
+
+      const postIds = rankedPosts.map((rp: any) => rp.post_id);
+
+      const { data: fullPosts, error: fetchError } = await supabase
         .from('posts')
         .select(`
           *,
@@ -307,23 +340,20 @@ export default function Home() {
             display_name,
             avatar_url
           )
-        `);
-
-      if (reportedPostIds.length > 0) {
-        query = query.not('id', 'in', reportedPostIds);
-      }
-
-      const { data, error: fetchError } = await query
-        .order('created_at', { ascending: false })
-        .range(from, to);
+        `)
+        .in('id', postIds);
 
       if (fetchError) {
         throw fetchError;
       }
 
-      if (data && data.length > 0) {
-        setPosts((prev) => pageNum === 0 ? data : [...prev, ...data]);
-        setHasMore(data.length === POSTS_PER_PAGE);
+      if (fullPosts && fullPosts.length > 0) {
+        const orderedPosts = postIds
+          .map(id => fullPosts.find(p => p.id === id))
+          .filter(Boolean);
+        
+        setPosts((prev) => pageNum === 0 ? orderedPosts : [...prev, ...orderedPosts]);
+        setHasMore(rankedPosts.length === POSTS_PER_PAGE);
       } else {
         setHasMore(false);
       }
