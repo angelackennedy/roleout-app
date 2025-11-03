@@ -8,6 +8,7 @@ import { useLiveChat } from '@/lib/hooks/useLiveChat';
 import { useAuth } from '@/lib/auth-context';
 import { formatRelativeTime } from '@/lib/time-utils';
 import Link from 'next/link';
+import LiveReactions from '@/components/LiveReactions';
 
 type LiveSession = {
   id: string;
@@ -365,6 +366,11 @@ export default function LiveViewerPage() {
                     👁️ {session.viewers} {session.viewers === 1 ? 'viewer' : 'viewers'}
                   </div>
                 </div>
+              </div>
+
+              {/* Reactions Bar */}
+              <div style={{ padding: '16px 24px', paddingTop: 0 }}>
+                <LiveReactions sessionId={sessionId} userId={user?.id || null} />
               </div>
 
               {/* Info Section */}
