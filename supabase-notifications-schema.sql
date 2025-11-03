@@ -43,10 +43,13 @@ CREATE POLICY "Users can mark their notifications as read"
   USING (auth.uid() = user_id)
   WITH CHECK (auth.uid() = user_id);
 
--- Create indexes for performance
-CREATE INDEX IF NOT EXISTS notifications_user_id_idx ON public.notifications(user_id);
-CREATE INDEX IF NOT EXISTS notifications_created_at_idx ON public.notifications(created_at DESC);
-CREATE INDEX IF NOT EXISTS notifications_user_read_idx ON public.notifications(user_id, read_at) 
+-- Create composite index for efficient queries (user's notifications ordered by recency)
+CREATE INDEX IF NOT EXISTS idx_notifications_user_created 
+  ON public.notifications(user_id, created_at DESC);
+
+-- Create partial index for unread notifications
+CREATE INDEX IF NOT EXISTS idx_notifications_unread 
+  ON public.notifications(user_id, read_at) 
   WHERE read_at IS NULL;
 
 -- Trigger function: Create notification when someone likes a post

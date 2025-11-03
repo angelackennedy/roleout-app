@@ -197,7 +197,7 @@ export default function NotificationsPage() {
       return `/u/${notification.actor.username}`;
     }
     if (notification.post_id) {
-      return `/`; // Could link to specific post if you have a post detail page
+      return `/post/${notification.post_id}`;
     }
     return '#';
   };
