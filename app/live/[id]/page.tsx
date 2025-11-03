@@ -20,11 +20,20 @@ type LiveSession = {
   viewers: number;
 };
 
+type Recording = {
+  id: string;
+  session_id: string;
+  public_url: string;
+  duration_seconds: number;
+  created_at: string;
+};
+
 export default function LiveViewerPage() {
   const params = useParams();
   const sessionId = params.id as string;
   const { user } = useAuth();
   const [session, setSession] = useState<LiveSession | null>(null);
+  const [recording, setRecording] = useState<Recording | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [chatInput, setChatInput] = useState('');
@@ -68,6 +77,27 @@ export default function LiveViewerPage() {
       setError('Failed to load session');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchRecording = async () => {
+    try {
+      const { data, error: fetchError } = await supabase
+        .from('live_recordings')
+        .select('*')
+        .eq('session_id', sessionId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (fetchError) {
+        console.error('Error fetching recording:', fetchError);
+      } else if (data) {
+        setRecording(data);
+        console.log('Recording loaded:', data);
+      }
+    } catch (err) {
+      console.error('Unexpected error fetching recording:', err);
     }
   };
 
@@ -160,7 +190,13 @@ export default function LiveViewerPage() {
         },
         (payload) => {
           console.log('Session updated:', payload);
-          setSession(payload.new as LiveSession);
+          const newSession = payload.new as LiveSession;
+          setSession(newSession);
+          
+          // Fetch recording when stream ends
+          if (!newSession.is_live && newSession.ended_at) {
+            fetchRecording();
+          }
         }
       )
       .subscribe();
@@ -170,6 +206,13 @@ export default function LiveViewerPage() {
       supabase.removeChannel(channel);
     };
   }, [session?.id]);
+
+  // Fetch recording on initial load if stream has ended
+  useEffect(() => {
+    if (session && !session.is_live && session.ended_at) {
+      fetchRecording();
+    }
+  }, [session?.id, session?.is_live]);
 
   if (loading) {
     return (
@@ -295,19 +338,40 @@ export default function LiveViewerPage() {
                     </>
                   ) : (
                     <>
-                      <div style={{ fontSize: 64, marginBottom: 16 }}>⏹️</div>
-                      <div style={{ fontSize: 24, fontWeight: 600, color: 'rgba(255,255,255,0.6)' }}>
-                        Stream Ended
-                      </div>
-                      {session.ended_at && (
-                        <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.5)', marginTop: 8 }}>
-                          Ended {formatRelativeTime(session.ended_at)}
-                        </div>
+                      {recording ? (
+                        <video
+                          controls
+                          playsInline
+                          style={{
+                            position: 'absolute',
+                            top: 0,
+                            left: 0,
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'contain',
+                          }}
+                          src={recording.public_url}
+                        />
+                      ) : (
+                        <>
+                          <div style={{ fontSize: 64, marginBottom: 16 }}>⏹️</div>
+                          <div style={{ fontSize: 24, fontWeight: 600, color: 'rgba(255,255,255,0.6)' }}>
+                            Stream Ended
+                          </div>
+                          {session.ended_at && (
+                            <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.5)', marginTop: 8 }}>
+                              Ended {formatRelativeTime(session.ended_at)}
+                            </div>
+                          )}
+                          <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.4)', marginTop: 8 }}>
+                            {session.ended_at ? 'Processing replay...' : 'No replay available'}
+                          </div>
+                        </>
                       )}
                     </>
                   )}
 
-                  {session.is_live && (
+                  {session.is_live ? (
                     <div style={{
                       position: 'absolute',
                       top: 20,
@@ -331,6 +395,24 @@ export default function LiveViewerPage() {
                         animation: 'pulse 2s infinite',
                       }} />
                       LIVE
+                    </div>
+                  ) : recording && (
+                    <div style={{
+                      position: 'absolute',
+                      top: 20,
+                      left: 20,
+                      background: 'rgba(212,175,55,0.8)',
+                      color: 'white',
+                      padding: '6px 12px',
+                      borderRadius: 4,
+                      fontSize: 12,
+                      fontWeight: 700,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      zIndex: 10,
+                    }}>
+                      ▶ REPLAY
                     </div>
                   )}
 
