@@ -4,6 +4,16 @@
 RollCall is a video-based social platform focused on authenticity and transparent moderation. Built with Next.js 14, TypeScript, Supabase, and Tailwind CSS.
 
 ## Recent Changes
+- **2025-11-03**: Reporting & Personal Hide
+  - Added hidden_posts table for personal content filtering
+  - Post menu now includes "Hide this post" and "Report" buttons
+  - Hidden posts excluded from For You and Following feeds
+  - Report dialog with textarea for user-provided reason
+  - Unique constraint prevents duplicate reports/hides
+  - RLS policies: users can only hide/report for themselves
+  - Admin-only access to reports table (via JWT role claim)
+  - Updated get_ranked_feed RPC to exclude hidden posts
+
 - **2025-11-03**: Notifications System
   - Automatic notifications for likes, comments, and follows
   - Created notifications table with RLS policies and composite indexes
@@ -95,7 +105,9 @@ RollCall is a video-based social platform focused on authenticity and transparen
 - `posts` - Video posts with engagement counts
 - `post_drafts` - Draft posts with autosave
 - `post_impressions` - Analytics tracking for algorithmic feed
-- `notifications` - User notifications for likes, comments, follows (new)
+- `notifications` - User notifications for likes, comments, follows
+- `reports` - User-submitted content reports (admin-only view)
+- `hidden_posts` - Personal content filtering per user
 - `conversations` - DM conversations metadata
 - `conversation_members` - DM conversation participants
 - `messages` - Direct messages with realtime chat
