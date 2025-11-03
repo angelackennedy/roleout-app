@@ -1,0 +1,54 @@
+Add live chat to ROLE OUT for each /live/{id} session using Supabase Realtime.
+
+Requirements:
+1) Schema:
+   - Create table public.live_chat (
+       id uuid primary key default gen_random_uuid(),
+       session_id uuid not null references public.live_sessions(id) on delete cascade,
+       user_id uuid not null,
+       message text not null,
+       created_at timestamptz default now()
+     );
+   - Enable RLS and add policies:
+       a) SELECT/INSERT only when auth.uid() = user_id.
+       b) Allow SELECT for viewers in the same session_id (read-only) without exposing other sessions:
+          USING (true) -- but filter in queries by session_id
+          OR implement stricter policy:
+          USING (exists(select 1 from public.live_sessions s where s.id = session_id))
+          WITH CHECK (auth.uid() = user_id).
+   - Create index on (session_id, created_at desc).
+
+2) UI on /live/[id]:
+   - Right side chat panel (or stacked on mobile).
+   - Show messages in chronological order with: avatar (initials), display name/email (if available), relative time, and message text.
+   - Input box fixed at bottom with "Send" button; press Enter to send.
+   - Disable input if user not signed in → show link to /login.
+   - Auto-scroll to newest message.
+
+3) Realtime:
+   - Subscribe to Supabase channel for public.live_chat changes where session_id = current id.
+   - On INSERT, append the new message without full refetch.
+   - Provide a lightweight fetch-on-mount (last 100 messages) then live-append.
+
+4) Sending:
+   - On submit, insert: { session_id: currentId, user_id: auth.user.id, message }.
+   - Clear input and keep focus; handle errors with a small inline toast.
+
+5) Rate-limit in UI:
+   - Prevent empty messages; trim whitespace.
+   - Lock send button for 300ms after each send to avoid spam.
+
+6) Minor extras:
+   - Show “n viewers • m messages” header using live_sessions.viewers and message count (count via RPC or simple select count).
+   - Handle session end: if is_live becomes false, keep chat visible but show “Stream ended”.
+
+7) Code style:
+   - TypeScript, client components with 'use client'.
+   - Use existing supabase client in lib/supabase.ts.
+   - Keep styling minimal; no global CSS changes; follow current Tailwind/inline pattern.
+
+8) Testing notes (print at end):
+   - /login → sign in
+   - /test-supabase → Create New Session → Go Live
+   - Open /live/{id} in two browser tabs; send messages back and forth
+   - Verify messages appear instantly in both tabs and rows exist in public.live_chat.
