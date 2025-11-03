@@ -166,7 +166,36 @@ Creates the complete analytics system with algorithmic ranking:
 - Users can only INSERT/UPDATE/SELECT their own impressions
 - Ranking function runs with SECURITY DEFINER for performance
 
-### 13. RLS and Performance Audit (IMPORTANT)
+### 13. Drafts with Autosave
+File: `supabase-drafts-schema.sql`
+
+Creates a comprehensive drafts system with autosave capabilities:
+
+**Post Drafts Table:**
+- Stores draft posts: `video_url`, `cover_url`, `caption`, `hashtags[]`
+- Auto-updating `updated_at` timestamp via trigger
+- Indexes on `user_id` and `updated_at` for fast queries
+
+**Features:**
+- **2-Tab Upload UI:** Switch between "New" and "Drafts" tabs
+- **Autosave:** Caption auto-saves every 2 seconds while typing
+- **Hashtag Extraction:** Automatically parses #tags from caption text
+- **Trending Tags:** Shows top 10 trending hashtags with tap-to-insert
+- **Cover Frame Picker:** Scrub video timeline to select custom cover image
+- **Draft-to-Post Flow:** Publishing converts draft → post and deletes draft
+
+**RLS Security:**
+- Users can only SELECT/INSERT/UPDATE/DELETE their own drafts
+- All operations scoped to `auth.uid() = user_id`
+
+**How it works:**
+1. User starts upload → video/caption saved as draft automatically
+2. Caption typing triggers autosave with 2s debounce (shows "Saved" tick)
+3. Hashtags extracted from caption and stored in `hashtags[]` array
+4. User can pick cover frame by scrubbing video with range slider
+5. Publishing creates post from draft data and deletes draft record
+
+### 14. RLS and Performance Audit (IMPORTANT)
 File: `supabase-rls-indexes-audit.sql`
 
 **Run this AFTER all other SQL files** to verify and optimize your setup:
