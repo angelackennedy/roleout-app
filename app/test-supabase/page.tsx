@@ -1,14 +1,30 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/lib/auth-context';
+import Link from 'next/link';
 
 export default function TestSupabasePage() {
   const [status, setStatus] = useState<string>('');
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const { user } = useAuth();
+
+  useEffect(() => {
+    if (user) {
+      setStatus(`✅ Logged in as user: ${user.id}`);
+    } else {
+      setStatus('⚠️ Not logged in - please sign in first');
+    }
+  }, [user]);
 
   const testInsert = async () => {
+    if (!user) {
+      setStatus('❌ Error: You must be logged in to create a session');
+      return;
+    }
+
     setLoading(true);
     setStatus('Inserting new live session...');
 
@@ -16,8 +32,8 @@ export default function TestSupabasePage() {
       const { data, error } = await supabase
         .from('live_sessions')
         .insert({
-          user_id: 'test-user-' + Date.now(),
-          title: 'Test Live Session ' + new Date().toLocaleTimeString(),
+          user_id: user.id,
+          title: 'Live Test',
           is_live: false,
           started_at: new Date().toISOString(),
           viewers: 0,
@@ -42,6 +58,11 @@ export default function TestSupabasePage() {
   };
 
   const goLive = async () => {
+    if (!user) {
+      setStatus('❌ Error: You must be logged in');
+      return;
+    }
+
     if (!sessionId) {
       setStatus('⚠️ Please create a session first');
       return;
@@ -77,6 +98,11 @@ export default function TestSupabasePage() {
   };
 
   const endLive = async () => {
+    if (!user) {
+      setStatus('❌ Error: You must be logged in');
+      return;
+    }
+
     if (!sessionId) {
       setStatus('⚠️ Please create a session first');
       return;
@@ -112,6 +138,11 @@ export default function TestSupabasePage() {
   };
 
   const fetchAllSessions = async () => {
+    if (!user) {
+      setStatus('❌ Error: You must be logged in');
+      return;
+    }
+
     setLoading(true);
     setStatus('Fetching all sessions...');
 
@@ -119,6 +150,7 @@ export default function TestSupabasePage() {
       const { data, error } = await supabase
         .from('live_sessions')
         .select('*')
+        .eq('user_id', user.id)
         .order('started_at', { ascending: false })
         .limit(10);
 
@@ -127,11 +159,24 @@ export default function TestSupabasePage() {
         setStatus(`❌ Error: ${error.message}`);
       } else {
         console.log('Fetched sessions:', data);
-        setStatus(`✅ Fetched ${data.length} sessions (check console for details)`);
+        setStatus(`✅ Fetched ${data.length} sessions for your user (check console for details)`);
       }
     } catch (err: any) {
       console.error('Unexpected error:', err);
       setStatus(`❌ Unexpected error: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSignOut = async () => {
+    setLoading(true);
+    try {
+      await supabase.auth.signOut();
+      setStatus('✅ Signed out successfully');
+      setSessionId(null);
+    } catch (err: any) {
+      setStatus(`❌ Error signing out: ${err.message}`);
     } finally {
       setLoading(false);
     }
@@ -157,7 +202,7 @@ export default function TestSupabasePage() {
           WebkitTextFillColor: 'transparent',
           backgroundClip: 'text',
         }}>
-          Supabase Connection Test
+          Supabase Live Sessions
         </h1>
         
         <p style={{
@@ -165,8 +210,73 @@ export default function TestSupabasePage() {
           marginBottom: 30,
           fontSize: 14,
         }}>
-          Test your connection to the live_sessions table
+          Test authenticated live session management
         </p>
+
+        <div style={{
+          background: 'rgba(255,255,255,0.05)',
+          border: '1px solid rgba(255,255,255,0.1)',
+          borderRadius: 12,
+          padding: 20,
+          marginBottom: 20,
+        }}>
+          <h2 style={{
+            fontSize: 16,
+            fontWeight: 600,
+            marginBottom: 10,
+          }}>
+            Authentication Status
+          </h2>
+          {user ? (
+            <>
+              <p style={{
+                color: 'rgba(0,255,0,0.8)',
+                fontSize: 14,
+                fontFamily: 'monospace',
+                marginBottom: 10,
+                wordBreak: 'break-all',
+              }}>
+                ✅ Logged in
+                <br />
+                User ID: {user.id}
+                <br />
+                Email: {user.email}
+              </p>
+              <button
+                onClick={handleSignOut}
+                disabled={loading}
+                className="nav-btn"
+                style={{
+                  padding: '8px 16px',
+                  fontSize: 14,
+                  background: 'linear-gradient(135deg, #666 0%, #333 100%)',
+                  opacity: loading ? 0.5 : 1,
+                  cursor: loading ? 'not-allowed' : 'pointer',
+                }}
+              >
+                Sign Out
+              </button>
+            </>
+          ) : (
+            <>
+              <p style={{
+                color: 'rgba(255,255,0,0.8)',
+                fontSize: 14,
+                marginBottom: 10,
+              }}>
+                ⚠️ Not logged in
+              </p>
+              <Link href="/login" className="nav-btn" style={{
+                display: 'inline-block',
+                padding: '8px 16px',
+                fontSize: 14,
+                textDecoration: 'none',
+              }}>
+                Go to Login →
+              </Link>
+            </>
+          )}
+        </div>
 
         <div style={{
           background: 'rgba(255,255,255,0.05)',
@@ -200,15 +310,15 @@ export default function TestSupabasePage() {
         }}>
           <button
             onClick={testInsert}
-            disabled={loading}
+            disabled={loading || !user}
             className="nav-btn"
             style={{
               width: '100%',
               padding: '14px 20px',
               fontSize: 16,
               fontWeight: 600,
-              opacity: loading ? 0.5 : 1,
-              cursor: loading ? 'not-allowed' : 'pointer',
+              opacity: loading || !user ? 0.5 : 1,
+              cursor: loading || !user ? 'not-allowed' : 'pointer',
             }}
           >
             {loading ? '⏳ Working...' : '➕ Create New Session'}
@@ -216,15 +326,15 @@ export default function TestSupabasePage() {
 
           <button
             onClick={goLive}
-            disabled={loading || !sessionId}
+            disabled={loading || !sessionId || !user}
             className="nav-btn"
             style={{
               width: '100%',
               padding: '14px 20px',
               fontSize: 16,
               fontWeight: 600,
-              opacity: loading || !sessionId ? 0.5 : 1,
-              cursor: loading || !sessionId ? 'not-allowed' : 'pointer',
+              opacity: loading || !sessionId || !user ? 0.5 : 1,
+              cursor: loading || !sessionId || !user ? 'not-allowed' : 'pointer',
               background: 'linear-gradient(135deg, #ff4444 0%, #cc0000 100%)',
             }}
           >
@@ -233,15 +343,15 @@ export default function TestSupabasePage() {
 
           <button
             onClick={endLive}
-            disabled={loading || !sessionId}
+            disabled={loading || !sessionId || !user}
             className="nav-btn"
             style={{
               width: '100%',
               padding: '14px 20px',
               fontSize: 16,
               fontWeight: 600,
-              opacity: loading || !sessionId ? 0.5 : 1,
-              cursor: loading || !sessionId ? 'not-allowed' : 'pointer',
+              opacity: loading || !sessionId || !user ? 0.5 : 1,
+              cursor: loading || !sessionId || !user ? 'not-allowed' : 'pointer',
               background: 'linear-gradient(135deg, #666 0%, #333 100%)',
             }}
           >
@@ -250,19 +360,19 @@ export default function TestSupabasePage() {
 
           <button
             onClick={fetchAllSessions}
-            disabled={loading}
+            disabled={loading || !user}
             className="nav-btn"
             style={{
               width: '100%',
               padding: '14px 20px',
               fontSize: 16,
               fontWeight: 600,
-              opacity: loading ? 0.5 : 1,
-              cursor: loading ? 'not-allowed' : 'pointer',
+              opacity: loading || !user ? 0.5 : 1,
+              cursor: loading || !user ? 'not-allowed' : 'pointer',
               background: 'linear-gradient(135deg, #4444ff 0%, #0000cc 100%)',
             }}
           >
-            {loading ? '⏳ Working...' : '📋 Fetch All Sessions'}
+            {loading ? '⏳ Working...' : '📋 Fetch My Sessions'}
           </button>
         </div>
 
@@ -301,13 +411,14 @@ export default function TestSupabasePage() {
             <strong>Instructions:</strong>
           </p>
           <ol style={{ margin: 0, paddingLeft: 20 }}>
-            <li>Click "Create New Session" to insert a test row</li>
+            <li>Sign in at /login with your email (magic link)</li>
+            <li>Click "Create New Session" to insert with your user_id (UUID)</li>
             <li>Click "Go Live" to set is_live=true and update started_at</li>
             <li>Click "End Live" to set is_live=false and set ended_at</li>
-            <li>Click "Fetch All Sessions" to see recent entries in console</li>
+            <li>Click "Fetch My Sessions" to see your entries in console</li>
           </ol>
           <p style={{ marginTop: 10, marginBottom: 0 }}>
-            Check your browser console (F12) for detailed logs.
+            <strong>RLS Note:</strong> Make sure your Supabase RLS policies allow operations where auth.uid() = user_id
           </p>
         </div>
       </div>
