@@ -50,17 +50,14 @@ ALTER TABLE public.posts
 CREATE INDEX IF NOT EXISTS posts_view_count_idx 
   ON public.posts(view_count DESC);
 
--- Function to update post view count
+-- Function to update post view count (incremental)
 CREATE OR REPLACE FUNCTION update_post_view_count()
 RETURNS TRIGGER AS $$
 BEGIN
-  -- Update the view_count in posts table
+  -- Increment the view_count in posts table
+  -- Only increments when a new impression is successfully inserted
   UPDATE public.posts
-  SET view_count = (
-    SELECT COUNT(DISTINCT user_id)
-    FROM public.post_impressions
-    WHERE post_id = NEW.post_id
-  )
+  SET view_count = view_count + 1
   WHERE id = NEW.post_id;
   
   RETURN NEW;
@@ -78,4 +75,4 @@ COMMENT ON TABLE public.post_impressions IS 'Tracks when users view posts (50% v
 COMMENT ON COLUMN public.post_impressions.post_id IS 'The post that was viewed';
 COMMENT ON COLUMN public.post_impressions.user_id IS 'The user who viewed the post (null for anonymous)';
 COMMENT ON COLUMN public.post_impressions.created_at IS 'When the impression was recorded';
-COMMENT ON COLUMN public.posts.view_count IS 'Total unique viewers of this post';
+COMMENT ON COLUMN public.posts.view_count IS 'Total daily unique impressions (max one per user per day)';
