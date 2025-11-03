@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { formatRelativeTime } from '@/lib/time-utils';
 import { useAuth } from '@/lib/auth-context';
 import { usePostLike } from '@/lib/hooks/usePostLike';
+import { CommentsDrawer } from '@/components/CommentsDrawer';
 
 type Profile = {
   id: string;
@@ -30,6 +31,7 @@ type Post = {
 
 function VideoPost({ post, isVisible, userId }: { post: Post; isVisible: boolean; userId: string | null }) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const [commentsOpen, setCommentsOpen] = useState(false);
   const { isLiked, likeCount, toggleLike, isLoading } = usePostLike({
     postId: post.id,
     initialLikeCount: post.like_count,
@@ -190,21 +192,24 @@ function VideoPost({ post, isVisible, userId }: { post: Post; isVisible: boolean
           </span>
         </button>
 
-        <button style={{
-          background: 'rgba(0,0,0,0.5)',
-          border: '2px solid white',
-          borderRadius: '50%',
-          width: 56,
-          height: 56,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontSize: 24,
-          cursor: 'pointer',
-          flexDirection: 'column',
-        }}>
+        <button 
+          onClick={() => setCommentsOpen(true)}
+          style={{
+            background: 'rgba(0,0,0,0.5)',
+            border: '2px solid white',
+            borderRadius: '50%',
+            width: 56,
+            height: 56,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: 24,
+            cursor: 'pointer',
+            flexDirection: 'column',
+          }}
+        >
           <span>💬</span>
-          <span style={{ fontSize: 12, fontWeight: 600, marginTop: 4 }}>
+          <span style={{ fontSize: 12, fontWeight: 600, marginTop: 4, color: 'white' }}>
             {post.comment_count}
           </span>
         </button>
@@ -252,6 +257,13 @@ function VideoPost({ post, isVisible, userId }: { post: Post; isVisible: boolean
         <span style={{ fontSize: 18 }}>+</span>
         Upload
       </Link>
+
+      <CommentsDrawer
+        postId={post.id}
+        userId={userId}
+        isOpen={commentsOpen}
+        onClose={() => setCommentsOpen(false)}
+      />
     </div>
   );
 }

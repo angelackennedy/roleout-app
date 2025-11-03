@@ -68,6 +68,19 @@ Creates atomic functions for likes:
 
 These ensure the `like_count` always stays in sync with actual likes.
 
+### 7. Post Comments Table
+File: `supabase-post-comments-schema.sql`
+
+Creates the `post_comments` table for comments:
+- `id`, `post_id`, `user_id`, `message`
+- Indexes on post_id, user_id, and created_at
+- Secure RPC functions:
+  - `add_comment_and_increment(p_post_id, p_message)` - Insert comment + increment count (derives user_id from auth.uid())
+  - `delete_comment_and_decrement(p_comment_id)` - Delete comment + decrement count (owner-only)
+
+**Security**: All functions verify authentication and prevent user impersonation.
+**Includes realtime subscriptions** - Comments appear instantly across all clients!
+
 ## Storage Buckets Summary
 
 After running all SQL files, you should have these buckets:
@@ -98,8 +111,9 @@ Once setup is complete, you can:
 3. **Upload videos** - Go to `/upload` to post videos with captions and hashtags
 4. **Browse feed** - Vertical TikTok-style feed on home page (`/`)
 5. **Like posts** - Click heart button (optimistic UI, instant feedback)
-6. **View profiles** - Visit `/u/[username]` to see user profiles
-7. **Live streaming** - Join sessions at `/live/[sessionId]` with WebRTC
+6. **Comment on posts** - Click comment button to open drawer, add comments with realtime updates
+7. **View profiles** - Visit `/u/[username]` to see user profiles
+8. **Live streaming** - Join sessions at `/live/[sessionId]` with WebRTC
 
 ## Troubleshooting
 
