@@ -117,7 +117,22 @@ Creates the complete notifications system:
 
 **Real-time notifications with automatic triggers!** Bell icon shows unread count and updates instantly.
 
-### 11. RLS and Performance Audit (IMPORTANT)
+### 11. Reports and Content Hiding
+File: `supabase-reports-schema.sql`
+
+Creates the reporting system for content moderation:
+- `reports` table with reporter_id, post_id, reason, created_at
+- RLS policies: Users can report posts (INSERT), only admins can view reports (SELECT)
+- Unique constraint prevents duplicate reports from same user
+- Indexes on reporter_id and post_id for fast lookups
+
+**How it works:**
+- Users can report posts via the menu (⋯) button on any post
+- Reported posts are automatically hidden from that user's feed
+- Reports are stored for admin review (admins have `role = 'admin'` in JWT)
+- Updated RPC functions (`search_posts`, `get_posts_by_hashtag`) filter out reported posts
+
+### 12. RLS and Performance Audit (IMPORTANT)
 File: `supabase-rls-indexes-audit.sql`
 
 **Run this AFTER all other SQL files** to verify and optimize your setup:
@@ -137,6 +152,8 @@ File: `supabase-rls-indexes-audit.sql`
 **Note:** This script recreates all storage policies for avatars, posts, and recordings to ensure they're all properly configured. All storage policy changes are wrapped in a **transaction** to ensure atomicity - if anything fails, all changes are rolled back automatically. This ensures your buckets are never left in a partially-secured state.
 
 This file is **idempotent** - safe to run multiple times!
+
+**Note:** After adding the reports feature, you'll need to re-run the search RPC functions SQL file (`supabase-search-rpc.sql`) to update the functions with the new `current_user_id` parameter for filtering reported posts.
 
 ## Storage Buckets Summary
 
@@ -184,7 +201,11 @@ Once setup is complete, you can:
     - Bell icon in header shows unread count
     - Real-time updates via Supabase subscriptions
     - Automatic triggers create notifications instantly
-12. **Live streaming** - Join sessions at `/live/[sessionId]` with WebRTC
+12. **Report posts** - Flag inappropriate content via the menu (⋯) button on any post
+    - Reported posts are automatically hidden from your feed
+    - Reports are stored for admin review
+    - Cannot report the same post twice
+13. **Live streaming** - Join sessions at `/live/[sessionId]` with WebRTC
 
 ## Security & Performance
 
