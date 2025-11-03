@@ -106,9 +106,9 @@ export function useWebRTCBroadcaster({ sessionId, userId, onError, onRecordingCo
 
     setUploadProgress(0);
 
-    // Generate file path
+    // Generate file path - must start with userId to match RLS policy
     const timestamp = Date.now();
-    const filePath = `recordings/${sessionId}/${sessionId}-${timestamp}.webm`;
+    const filePath = `${userId}/${sessionId}/${sessionId}-${timestamp}.webm`;
 
     console.log('Uploading to:', filePath);
 
