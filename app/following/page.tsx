@@ -294,6 +294,8 @@ export default function FollowingFeed() {
     if (!user) return;
 
     setLoading(true);
+    setError(null); // Clear any previous errors
+    
     try {
       const from = pageNum * POSTS_PER_PAGE;
       const to = from + POSTS_PER_PAGE - 1;
@@ -304,10 +306,19 @@ export default function FollowingFeed() {
         .select('following_id')
         .eq('follower_id', user.id);
 
-      if (followingError) throw followingError;
+      // Handle follow query errors gracefully
+      if (followingError) {
+        // If follows table doesn't exist or schema error, treat as no follows
+        console.warn('Could not fetch follows:', followingError);
+        setPosts([]);
+        setHasMore(false);
+        setLoading(false);
+        return;
+      }
 
       const followingIds = followingData?.map((f) => f.following_id) || [];
 
+      // If user isn't following anyone, show empty state
       if (followingIds.length === 0) {
         setPosts([]);
         setHasMore(false);
@@ -491,7 +502,7 @@ export default function FollowingFeed() {
     );
   }
 
-  if (posts.length === 0) {
+  if (posts.length === 0 && !loading) {
     return (
       <div style={{
         height: '100vh',
@@ -504,7 +515,7 @@ export default function FollowingFeed() {
         padding: 20,
       }}>
         <div style={{ fontSize: 64, marginBottom: 20 }}>👥</div>
-        <div style={{ fontSize: 24, marginBottom: 8, fontWeight: 600 }}>No posts yet</div>
+        <div style={{ fontSize: 24, marginBottom: 8, fontWeight: 600 }}>You're not following anyone yet</div>
         <div style={{ fontSize: 16, marginBottom: 30, opacity: 0.8 }}>
           Follow some users to see their posts here!
         </div>
