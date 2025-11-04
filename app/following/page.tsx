@@ -37,7 +37,7 @@ function VideoPost({ post, userId, index, currentIndex }: {
   index: number;
   currentIndex: number;
 }) {
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
   const [commentsOpen, setCommentsOpen] = useState(false);
   const { isLiked, likeCount, toggleLike, isLoading } = usePostLike({
     postId: post.id,

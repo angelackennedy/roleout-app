@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 
 interface UseVideoPreloadProps {
-  videoRef: React.RefObject<HTMLVideoElement>;
+  videoRef: React.RefObject<HTMLVideoElement | null>;
   index: number;
   currentIndex: number;
 }
