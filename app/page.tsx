@@ -19,12 +19,7 @@ type Post = {
   id: string;
   user_id: string;
   video_url: string;
-  cover_url: string | null;
   caption: string | null;
-  hashtags: string[] | null;
-  like_count: number;
-  comment_count: number;
-  share_count: number;
   created_at: string;
   profiles: Profile;
 };
@@ -39,7 +34,7 @@ function VideoPost({ post, userId, index, currentIndex }: {
   const [commentsOpen, setCommentsOpen] = useState(false);
   const { isLiked, likeCount, toggleLike, isLoading } = usePostLike({
     postId: post.id,
-    initialLikeCount: post.like_count,
+    initialLikeCount: 0, // Default to 0 since like_count not in schema
     userId,
   });
 
@@ -122,28 +117,6 @@ function VideoPost({ post, userId, index, currentIndex }: {
             {post.caption}
           </div>
         )}
-
-        {post.hashtags && post.hashtags.length > 0 && (
-          <div style={{
-            display: 'flex',
-            flexWrap: 'wrap',
-            gap: 8,
-            marginBottom: 12,
-          }}>
-            {post.hashtags.map((tag) => (
-              <span
-                key={tag}
-                style={{
-                  fontSize: 13,
-                  color: 'rgba(212,175,55,0.9)',
-                  fontWeight: 500,
-                }}
-              >
-                {tag}
-              </span>
-            ))}
-          </div>
-        )}
       </div>
 
       <div style={{
@@ -207,9 +180,6 @@ function VideoPost({ post, userId, index, currentIndex }: {
           }}
         >
           <span>💬</span>
-          <span style={{ fontSize: 12, fontWeight: 600, marginTop: 4, color: 'white' }}>
-            {post.comment_count}
-          </span>
         </button>
 
         <button style={{
@@ -226,9 +196,6 @@ function VideoPost({ post, userId, index, currentIndex }: {
           flexDirection: 'column',
         }}>
           <span>↗️</span>
-          <span style={{ fontSize: 12, fontWeight: 600, marginTop: 4 }}>
-            {post.share_count}
-          </span>
         </button>
       </div>
 
@@ -289,12 +256,7 @@ export default function Home() {
             id,
             user_id,
             video_url,
-            cover_url,
             caption,
-            hashtags,
-            like_count,
-            comment_count,
-            share_count,
             created_at,
             profiles!posts_user_id_fkey (
               id,
@@ -342,12 +304,7 @@ export default function Home() {
             id,
             user_id,
             video_url,
-            cover_url,
             caption,
-            hashtags,
-            like_count,
-            comment_count,
-            share_count,
             created_at,
             profiles!posts_user_id_fkey (
               id,
@@ -392,7 +349,6 @@ export default function Home() {
           id,
           user_id,
           video_url,
-          cover_url,
           caption,
           hashtags,
           like_count,
