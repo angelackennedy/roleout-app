@@ -137,7 +137,11 @@ export default function ProfilePage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) return;
+    
+    if (!user) {
+      setError('Please sign in to edit your profile.');
+      return;
+    }
 
     setSaving(true);
     setError(null);
@@ -146,21 +150,23 @@ export default function ProfilePage() {
     try {
       const { error: updateError } = await supabase
         .from('profiles')
-        .update({
+        .upsert({
+          id: user.id,
           username: formData.username.trim(),
           display_name: formData.display_name.trim() || null,
           bio: formData.bio.trim() || null,
-        })
-        .eq('id', user.id);
+        });
 
       if (updateError) {
         if (updateError.code === '23505') {
           setError('Username already taken');
         } else {
+          console.error('Error updating profile:', updateError);
           throw updateError;
         }
       } else {
-        setSuccess('Profile updated successfully!');
+        setError(null);
+        setSuccess('Profile updated!');
         setTimeout(() => setSuccess(null), 3000);
         fetchProfile();
       }
