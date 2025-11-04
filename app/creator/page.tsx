@@ -223,9 +223,9 @@ export default function CreatorDashboard() {
         </div>
 
         {/* Views per day chart */}
-        {data.dailyViews.length > 0 && (
-          <div className="bg-gray-800 rounded-xl p-6 shadow-lg mb-8">
-            <h2 className="text-2xl font-bold mb-4">Views per Day (Last 30 Days)</h2>
+        <div className="bg-gray-800 rounded-xl p-6 shadow-lg mb-8">
+          <h2 className="text-2xl font-bold mb-4">Views per Day (Last 30 Days)</h2>
+          {data.dailyViews.length > 0 ? (
             <ResponsiveContainer width="100%" height={300}>
               <LineChart data={data.dailyViews}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
@@ -259,14 +259,20 @@ export default function CreatorDashboard() {
                 />
               </LineChart>
             </ResponsiveContainer>
-          </div>
-        )}
+          ) : (
+            <div className="text-center py-16 text-gray-400">
+              <div className="text-6xl mb-4">👁️</div>
+              <div className="text-xl mb-2">No views yet</div>
+              <div className="text-sm">When people watch your posts, views will appear here</div>
+            </div>
+          )}
+        </div>
 
         {/* Engagement rate chart */}
-        {data.dailyEngagement.length > 0 && (
-          <div className="bg-gray-800 rounded-xl p-6 shadow-lg mb-8">
-            <h2 className="text-2xl font-bold mb-4">Engagement Rate per Day (Last 30 Days)</h2>
-            <p className="text-sm text-gray-400 mb-4">Engagement Rate = (Likes + Comments) / Views × 100%</p>
+        <div className="bg-gray-800 rounded-xl p-6 shadow-lg mb-8">
+          <h2 className="text-2xl font-bold mb-4">Engagement Rate per Day (Last 30 Days)</h2>
+          <p className="text-sm text-gray-400 mb-4">Engagement Rate = (Likes + Comments) / Views × 100%</p>
+          {data.dailyEngagement.length > 0 ? (
             <ResponsiveContainer width="100%" height={300}>
               <LineChart data={data.dailyEngagement}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
@@ -302,8 +308,14 @@ export default function CreatorDashboard() {
                 />
               </LineChart>
             </ResponsiveContainer>
-          </div>
-        )}
+          ) : (
+            <div className="text-center py-16 text-gray-400">
+              <div className="text-6xl mb-4">📊</div>
+              <div className="text-xl mb-2">No engagement data yet</div>
+              <div className="text-sm">Engagement data will appear when your posts get views, likes, and comments</div>
+            </div>
+          )}
+        </div>
 
         {data.dailyFollowers.length > 0 && (
           <div className="bg-gray-800 rounded-xl p-6 shadow-lg mb-8">
