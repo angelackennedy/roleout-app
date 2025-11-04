@@ -5,6 +5,7 @@ import Link from "next/link";
 import { MODE, PAGE_SIZE } from "@/lib/config";
 import { initLocalDB, listPosts, likePost, listComments, addComment, commentsChannel } from "@/lib/localdb";
 import { useAuth } from "@/lib/auth-context";
+import { PostItem } from "@/components/PostItem";
 
 let supabase: any = null;
 if (MODE === "supabase") {
@@ -821,9 +822,11 @@ export default function FeedPage() {
             const hasLikeAnimation = likeAnimations.has(post.id);
 
             return (
-              <div
+              <PostItem
                 key={post.id}
-                ref={(el) => {
+                postId={post.id}
+                userId={user?.id || null}
+                onRefAssign={(el) => {
                   if (el) {
                     postRefsMap.current.set(post.id, el);
                   }
@@ -831,7 +834,7 @@ export default function FeedPage() {
                     lastPostRef.current = el;
                   }
                 }}
-                data-post-id={post.id}
+                dataPostId={post.id}
                 className="postFrame"
                 style={{
                   scrollSnapAlign: "start",
@@ -1110,7 +1113,7 @@ export default function FeedPage() {
                     </div>
                   </div>
                 )}
-              </div>
+              </PostItem>
             );
           })}
 
