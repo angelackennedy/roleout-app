@@ -8,11 +8,25 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 
 type TimePeriod = 7 | 30 | 90;
 
+type MetricData = {
+  lifetime: number;
+  last7: number;
+  last30: number;
+};
+
 type AnalyticsData = {
-  totalViews: number;
-  totalLikes: number;
-  totalComments: number;
-  followerGrowth: number;
+  totalViews: MetricData;
+  totalLikes: MetricData;
+  totalComments: MetricData;
+  totalFollowers: MetricData;
+  dailyViews: Array<{
+    date: string;
+    views: number;
+  }>;
+  dailyEngagement: Array<{
+    date: string;
+    engagementRate: number;
+  }>;
   topPosts: Array<{
     id: string;
     caption: string;
@@ -122,26 +136,62 @@ export default function CreatorDashboard() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           <div className="bg-gradient-to-br from-purple-600 to-purple-800 rounded-xl p-6 shadow-lg">
             <div className="text-sm font-semibold text-purple-200 mb-2">Total Views</div>
-            <div className="text-4xl font-bold">{data.totalViews.toLocaleString()}</div>
-            <div className="text-xs text-purple-200 mt-2">Last {timePeriod} days</div>
+            <div className="text-4xl font-bold mb-3">{data.totalViews.lifetime.toLocaleString()}</div>
+            <div className="space-y-1 text-xs text-purple-200">
+              <div className="flex justify-between">
+                <span>Last 7 days:</span>
+                <span className="font-semibold">{data.totalViews.last7.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Last 30 days:</span>
+                <span className="font-semibold">{data.totalViews.last30.toLocaleString()}</span>
+              </div>
+            </div>
           </div>
 
           <div className="bg-gradient-to-br from-pink-600 to-pink-800 rounded-xl p-6 shadow-lg">
             <div className="text-sm font-semibold text-pink-200 mb-2">Total Likes</div>
-            <div className="text-4xl font-bold">{data.totalLikes.toLocaleString()}</div>
-            <div className="text-xs text-pink-200 mt-2">Last {timePeriod} days</div>
+            <div className="text-4xl font-bold mb-3">{data.totalLikes.lifetime.toLocaleString()}</div>
+            <div className="space-y-1 text-xs text-pink-200">
+              <div className="flex justify-between">
+                <span>Last 7 days:</span>
+                <span className="font-semibold">{data.totalLikes.last7.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Last 30 days:</span>
+                <span className="font-semibold">{data.totalLikes.last30.toLocaleString()}</span>
+              </div>
+            </div>
           </div>
 
           <div className="bg-gradient-to-br from-blue-600 to-blue-800 rounded-xl p-6 shadow-lg">
             <div className="text-sm font-semibold text-blue-200 mb-2">Total Comments</div>
-            <div className="text-4xl font-bold">{data.totalComments.toLocaleString()}</div>
-            <div className="text-xs text-blue-200 mt-2">Last {timePeriod} days</div>
+            <div className="text-4xl font-bold mb-3">{data.totalComments.lifetime.toLocaleString()}</div>
+            <div className="space-y-1 text-xs text-blue-200">
+              <div className="flex justify-between">
+                <span>Last 7 days:</span>
+                <span className="font-semibold">{data.totalComments.last7.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Last 30 days:</span>
+                <span className="font-semibold">{data.totalComments.last30.toLocaleString()}</span>
+              </div>
+            </div>
           </div>
 
           <div className="bg-gradient-to-br from-green-600 to-green-800 rounded-xl p-6 shadow-lg">
-            <div className="text-sm font-semibold text-green-200 mb-2">New Followers</div>
-            <div className="text-4xl font-bold">{data.followerGrowth.toLocaleString()}</div>
-            <div className="text-xs text-green-200 mt-2">Last {timePeriod} days</div>
+            <div className="text-sm font-semibold text-green-200 mb-2">Total Followers</div>
+            <div className="text-4xl font-bold mb-3">{data.totalFollowers.lifetime.toLocaleString()}</div>
+            <div className="space-y-1 text-xs text-green-200">
+              <div className="flex justify-between">
+                <span>Last 7 days:</span>
+                <span className="font-semibold">{data.totalFollowers.last7.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Last 30 days:</span>
+                <span className="font-semibold">{data.totalFollowers.last30.toLocaleString()}</span>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -171,6 +221,89 @@ export default function CreatorDashboard() {
             <div className="text-sm text-orange-200">View gifts from your fans and supporters</div>
           </Link>
         </div>
+
+        {/* Views per day chart */}
+        {data.dailyViews.length > 0 && (
+          <div className="bg-gray-800 rounded-xl p-6 shadow-lg mb-8">
+            <h2 className="text-2xl font-bold mb-4">Views per Day (Last 30 Days)</h2>
+            <ResponsiveContainer width="100%" height={300}>
+              <LineChart data={data.dailyViews}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                <XAxis 
+                  dataKey="date" 
+                  tickFormatter={formatDate}
+                  stroke="#9CA3AF"
+                  style={{ fontSize: '12px' }}
+                />
+                <YAxis 
+                  stroke="#9CA3AF"
+                  style={{ fontSize: '12px' }}
+                />
+                <Tooltip 
+                  contentStyle={{ 
+                    backgroundColor: '#1F2937', 
+                    border: '1px solid #374151',
+                    borderRadius: '8px',
+                    color: '#fff'
+                  }}
+                  labelFormatter={(label) => `Date: ${label}`}
+                />
+                <Line 
+                  type="monotone" 
+                  dataKey="views" 
+                  stroke="#A855F7" 
+                  strokeWidth={3}
+                  dot={{ fill: '#A855F7', r: 4 }}
+                  activeDot={{ r: 6 }}
+                  name="Views"
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+
+        {/* Engagement rate chart */}
+        {data.dailyEngagement.length > 0 && (
+          <div className="bg-gray-800 rounded-xl p-6 shadow-lg mb-8">
+            <h2 className="text-2xl font-bold mb-4">Engagement Rate per Day (Last 30 Days)</h2>
+            <p className="text-sm text-gray-400 mb-4">Engagement Rate = (Likes + Comments) / Views × 100%</p>
+            <ResponsiveContainer width="100%" height={300}>
+              <LineChart data={data.dailyEngagement}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                <XAxis 
+                  dataKey="date" 
+                  tickFormatter={formatDate}
+                  stroke="#9CA3AF"
+                  style={{ fontSize: '12px' }}
+                />
+                <YAxis 
+                  stroke="#9CA3AF"
+                  style={{ fontSize: '12px' }}
+                  label={{ value: 'Rate (%)', angle: -90, position: 'insideLeft', style: { fill: '#9CA3AF' } }}
+                />
+                <Tooltip 
+                  contentStyle={{ 
+                    backgroundColor: '#1F2937', 
+                    border: '1px solid #374151',
+                    borderRadius: '8px',
+                    color: '#fff'
+                  }}
+                  labelFormatter={(label) => `Date: ${label}`}
+                  formatter={(value: number) => [`${value}%`, 'Engagement Rate']}
+                />
+                <Line 
+                  type="monotone" 
+                  dataKey="engagementRate" 
+                  stroke="#F59E0B" 
+                  strokeWidth={3}
+                  dot={{ fill: '#F59E0B', r: 4 }}
+                  activeDot={{ r: 6 }}
+                  name="Engagement Rate (%)"
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        )}
 
         {data.dailyFollowers.length > 0 && (
           <div className="bg-gray-800 rounded-xl p-6 shadow-lg mb-8">
