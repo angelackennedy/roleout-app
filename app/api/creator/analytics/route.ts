@@ -17,8 +17,13 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const days = parseInt(searchParams.get('days') || '30');
 
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - days);
+    const now = new Date();
+    const startDate30 = new Date(now);
+    startDate30.setDate(startDate30.getDate() - 30);
+    const startDate7 = new Date(now);
+    startDate7.setDate(startDate7.getDate() - 7);
+    const startDateCustom = new Date(now);
+    startDateCustom.setDate(startDateCustom.getDate() - days);
 
     const { data: userPosts, error: postsError } = await supabase
       .from('posts')
@@ -37,113 +42,183 @@ export async function GET(request: NextRequest) {
 
     if (postIds.length === 0) {
       return NextResponse.json({
-        totalViews: 0,
-        totalLikes: 0,
-        totalComments: 0,
-        followerGrowth: 0,
+        totalViews: { lifetime: 0, last7: 0, last30: 0 },
+        totalLikes: { lifetime: 0, last7: 0, last30: 0 },
+        totalComments: { lifetime: 0, last7: 0, last30: 0 },
+        totalFollowers: { lifetime: 0, last7: 0, last30: 0 },
+        dailyViews: [],
+        dailyEngagement: [],
         topPosts: [],
         dailyFollowers: [],
       });
     }
 
-    const { data: impressions, error: impressionsError } = await supabase
+    // Fetch ALL impressions (lifetime)
+    const { data: allImpressions } = await supabase
       .from('post_impressions')
-      .select('*')
+      .select('created_at')
+      .in('post_id', postIds);
+
+    // Fetch impressions for last 30 days
+    const { data: impressions30 } = await supabase
+      .from('post_impressions')
+      .select('created_at')
       .in('post_id', postIds)
-      .gte('created_at', startDate.toISOString());
+      .gte('created_at', startDate30.toISOString());
 
-    if (impressionsError) {
-      console.error('Error fetching impressions:', impressionsError);
-      return NextResponse.json(
-        { error: 'Failed to fetch impressions' },
-        { status: 500 }
-      );
-    }
+    // Fetch impressions for last 7 days
+    const { data: impressions7 } = await supabase
+      .from('post_impressions')
+      .select('created_at')
+      .in('post_id', postIds)
+      .gte('created_at', startDate7.toISOString());
 
-    const totalViews = impressions?.length || 0;
-
-    const { data: likes, error: likesError } = await supabase
+    // Fetch ALL likes (lifetime)
+    const { data: allLikes } = await supabase
       .from('post_likes')
-      .select('post_id, created_at')
+      .select('created_at')
+      .in('post_id', postIds);
+
+    // Fetch likes for last 30 days
+    const { data: likes30 } = await supabase
+      .from('post_likes')
+      .select('created_at')
       .in('post_id', postIds)
-      .gte('created_at', startDate.toISOString());
+      .gte('created_at', startDate30.toISOString());
 
-    if (likesError) {
-      console.error('Error fetching likes:', likesError);
-      return NextResponse.json(
-        { error: 'Failed to fetch likes' },
-        { status: 500 }
-      );
-    }
+    // Fetch likes for last 7 days
+    const { data: likes7 } = await supabase
+      .from('post_likes')
+      .select('created_at')
+      .in('post_id', postIds)
+      .gte('created_at', startDate7.toISOString());
 
-    const totalLikes = likes?.length || 0;
-
-    const { data: comments, error: commentsError } = await supabase
+    // Fetch ALL comments (lifetime)
+    const { data: allComments } = await supabase
       .from('post_comments')
-      .select('post_id, created_at')
+      .select('created_at')
+      .in('post_id', postIds);
+
+    // Fetch comments for last 30 days
+    const { data: comments30 } = await supabase
+      .from('post_comments')
+      .select('created_at')
       .in('post_id', postIds)
-      .gte('created_at', startDate.toISOString());
+      .gte('created_at', startDate30.toISOString());
 
-    if (commentsError) {
-      console.error('Error fetching comments:', commentsError);
-      return NextResponse.json(
-        { error: 'Failed to fetch comments' },
-        { status: 500 }
-      );
-    }
+    // Fetch comments for last 7 days
+    const { data: comments7 } = await supabase
+      .from('post_comments')
+      .select('created_at')
+      .in('post_id', postIds)
+      .gte('created_at', startDate7.toISOString());
 
-    const totalComments = comments?.length || 0;
+    // Fetch ALL followers (lifetime)
+    const { data: allFollowers } = await supabase
+      .from('follows')
+      .select('created_at')
+      .eq('following_id', user.id);
 
-    const { data: followers, error: followersError } = await supabase
+    // Fetch followers for last 30 days
+    const { data: followers30 } = await supabase
       .from('follows')
       .select('created_at')
       .eq('following_id', user.id)
-      .gte('created_at', startDate.toISOString())
-      .order('created_at', { ascending: true });
+      .gte('created_at', startDate30.toISOString());
 
-    if (followersError) {
-      console.error('Error fetching followers:', followersError);
-      return NextResponse.json(
-        { error: 'Failed to fetch followers' },
-        { status: 500 }
-      );
+    // Fetch followers for last 7 days
+    const { data: followers7 } = await supabase
+      .from('follows')
+      .select('created_at')
+      .eq('following_id', user.id)
+      .gte('created_at', startDate7.toISOString());
+
+    // Build daily views and engagement maps
+    const dailyViewsMap = new Map<string, number>();
+    const dailyLikesMap = new Map<string, number>();
+    const dailyCommentsMap = new Map<string, number>();
+
+    // Initialize all days with 0
+    for (let i = 0; i < 30; i++) {
+      const date = new Date(now);
+      date.setDate(date.getDate() - i);
+      const dateStr = date.toISOString().split('T')[0];
+      dailyViewsMap.set(dateStr, 0);
+      dailyLikesMap.set(dateStr, 0);
+      dailyCommentsMap.set(dateStr, 0);
     }
 
-    const followerGrowth = followers?.length || 0;
+    // Count views per day
+    impressions30?.forEach(imp => {
+      const dateStr = new Date(imp.created_at).toISOString().split('T')[0];
+      dailyViewsMap.set(dateStr, (dailyViewsMap.get(dateStr) || 0) + 1);
+    });
+
+    // Count likes per day
+    likes30?.forEach(like => {
+      const dateStr = new Date(like.created_at).toISOString().split('T')[0];
+      dailyLikesMap.set(dateStr, (dailyLikesMap.get(dateStr) || 0) + 1);
+    });
+
+    // Count comments per day
+    comments30?.forEach(comment => {
+      const dateStr = new Date(comment.created_at).toISOString().split('T')[0];
+      dailyCommentsMap.set(dateStr, (dailyCommentsMap.get(dateStr) || 0) + 1);
+    });
+
+    // Build daily views array
+    const dailyViews = Array.from(dailyViewsMap.entries())
+      .map(([date, views]) => ({ date, views }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    // Build daily engagement array (engagement rate = (likes + comments) / views)
+    const dailyEngagement = Array.from(dailyViewsMap.keys())
+      .map(date => {
+        const views = dailyViewsMap.get(date) || 0;
+        const likes = dailyLikesMap.get(date) || 0;
+        const comments = dailyCommentsMap.get(date) || 0;
+        const engagementRate = views > 0 ? ((likes + comments) / views) * 100 : 0;
+        
+        return {
+          date,
+          engagementRate: Math.round(engagementRate * 10) / 10,
+        };
+      })
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    // Build followers growth chart (for custom days period)
+    const { data: followersCustom, error: followersError } = await supabase
+      .from('follows')
+      .select('created_at')
+      .eq('following_id', user.id)
+      .gte('created_at', startDateCustom.toISOString())
+      .order('created_at', { ascending: true });
 
     const dailyFollowerCounts = new Map<string, number>();
     let cumulativeFollowers = 0;
 
-    const { data: existingFollowers, error: existingFollowersError } = await supabase
+    const { data: existingFollowers } = await supabase
       .from('follows')
       .select('id')
       .eq('following_id', user.id)
-      .lt('created_at', startDate.toISOString());
-
-    if (existingFollowersError) {
-      console.error('Error fetching existing followers:', existingFollowersError);
-      return NextResponse.json(
-        { error: 'Failed to fetch existing followers' },
-        { status: 500 }
-      );
-    }
+      .lt('created_at', startDateCustom.toISOString());
 
     cumulativeFollowers = existingFollowers?.length || 0;
 
     for (let i = 0; i < days; i++) {
-      const date = new Date(startDate);
+      const date = new Date(startDateCustom);
       date.setDate(date.getDate() + i);
       const dateStr = date.toISOString().split('T')[0];
       dailyFollowerCounts.set(dateStr, cumulativeFollowers);
     }
 
-    followers?.forEach(follow => {
+    followersCustom?.forEach(follow => {
       const date = new Date(follow.created_at).toISOString().split('T')[0];
       cumulativeFollowers++;
       dailyFollowerCounts.set(date, cumulativeFollowers);
       
       for (let i = 0; i < days; i++) {
-        const checkDate = new Date(startDate);
+        const checkDate = new Date(startDateCustom);
         checkDate.setDate(checkDate.getDate() + i);
         const checkDateStr = checkDate.toISOString().split('T')[0];
         if (checkDateStr > date && dailyFollowerCounts.get(checkDateStr)! < cumulativeFollowers) {
@@ -215,10 +290,28 @@ export async function GET(request: NextRequest) {
     );
 
     return NextResponse.json({
-      totalViews,
-      totalLikes,
-      totalComments,
-      followerGrowth,
+      totalViews: {
+        lifetime: allImpressions?.length || 0,
+        last7: impressions7?.length || 0,
+        last30: impressions30?.length || 0,
+      },
+      totalLikes: {
+        lifetime: allLikes?.length || 0,
+        last7: likes7?.length || 0,
+        last30: likes30?.length || 0,
+      },
+      totalComments: {
+        lifetime: allComments?.length || 0,
+        last7: comments7?.length || 0,
+        last30: comments30?.length || 0,
+      },
+      totalFollowers: {
+        lifetime: allFollowers?.length || 0,
+        last7: followers7?.length || 0,
+        last30: followers30?.length || 0,
+      },
+      dailyViews,
+      dailyEngagement,
       topPosts,
       dailyFollowers,
     });
