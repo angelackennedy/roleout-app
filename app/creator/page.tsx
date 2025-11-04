@@ -61,11 +61,17 @@ export default function CreatorDashboard() {
   }, [user, timePeriod]);
 
   const fetchAnalytics = async () => {
+    if (!user) {
+      setError('Sign in required');
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
     try {
-      const response = await fetch(`/api/creator/analytics?days=${timePeriod}`);
+      const response = await fetch(`/api/analytics?userId=${user.id}&days=${timePeriod}`, { cache: 'no-store' });
       
       if (!response.ok) {
         throw new Error('Failed to fetch analytics');
