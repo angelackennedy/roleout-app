@@ -71,17 +71,44 @@ export default function CreatorDashboard() {
     setError(null);
 
     try {
-      const response = await fetch(`/api/analytics?userId=${user.id}&days=${timePeriod}`, { cache: 'no-store' });
+      const url = `/api/analytics?userId=${user.id}&days=${timePeriod}`;
+      console.log('Fetching analytics from:', url);
+      
+      const response = await fetch(url, { cache: 'no-store' });
       
       if (!response.ok) {
-        throw new Error('Failed to fetch analytics');
+        const errorData = await response.json().catch(() => ({ error: 'Failed to fetch analytics' }));
+        throw new Error(errorData.error || 'Failed to fetch analytics');
       }
 
       const analyticsData = await response.json();
-      setData(analyticsData);
+      
+      if (analyticsData.error) {
+        setData({
+          totalViews: { lifetime: 0, last7: 0, last30: 0 },
+          totalLikes: { lifetime: 0, last7: 0, last30: 0 },
+          totalComments: { lifetime: 0, last7: 0, last30: 0 },
+          totalFollowers: { lifetime: 0, last7: 0, last30: 0 },
+          dailyViews: [],
+          dailyEngagement: [],
+          topPosts: [],
+          dailyFollowers: [],
+        });
+      } else {
+        setData(analyticsData);
+      }
     } catch (err: any) {
       console.error('Error fetching analytics:', err);
-      setError(err.message || 'Failed to load analytics');
+      setData({
+        totalViews: { lifetime: 0, last7: 0, last30: 0 },
+        totalLikes: { lifetime: 0, last7: 0, last30: 0 },
+        totalComments: { lifetime: 0, last7: 0, last30: 0 },
+        totalFollowers: { lifetime: 0, last7: 0, last30: 0 },
+        dailyViews: [],
+        dailyEngagement: [],
+        topPosts: [],
+        dailyFollowers: [],
+      });
     } finally {
       setLoading(false);
     }
