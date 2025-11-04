@@ -276,7 +276,7 @@ function CommentItem({ comment }: { comment: Comment }) {
               textDecoration: 'none',
             }}
           >
-            {comment.profiles.display_name || comment.profiles.username}
+            {comment.profiles.username}
           </Link>
           <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12 }}>
             {formatRelativeTime(comment.created_at)}
@@ -290,7 +290,7 @@ function CommentItem({ comment }: { comment: Comment }) {
             wordBreak: 'break-word',
           }}
         >
-          {comment.message}
+          {comment.content}
         </div>
       </div>
     </div>

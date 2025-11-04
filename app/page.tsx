@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { formatRelativeTime } from '@/lib/time-utils';
 import { useAuth } from '@/lib/auth-context';
 import { usePostLike } from '@/lib/hooks/usePostLike';
+import { useCommentCount } from '@/lib/hooks/useCommentCount';
 import { CommentsDrawer } from '@/components/CommentsDrawer';
 import { useVideoPreload } from '@/lib/hooks/useVideoPreload';
 
@@ -37,6 +38,7 @@ function VideoPost({ post, userId, index, currentIndex }: {
     initialLikeCount: 0, // Default to 0 since like_count not in schema
     userId,
   });
+  const { commentCount } = useCommentCount({ postId: post.id });
 
   // Use video preload hook for optimized loading
   useVideoPreload({
@@ -180,6 +182,9 @@ function VideoPost({ post, userId, index, currentIndex }: {
           }}
         >
           <span>💬</span>
+          <span style={{ fontSize: 12, fontWeight: 600, marginTop: 4, color: 'white' }}>
+            {commentCount}
+          </span>
         </button>
 
         <button style={{

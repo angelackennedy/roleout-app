@@ -20,28 +20,37 @@ export function usePostLike({ postId, initialLikeCount, userId }: UsePostLikePro
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    if (!userId) {
-      setIsLiked(false);
-      return;
-    }
-
-    const checkIfLiked = async () => {
+    const fetchLikeData = async () => {
       try {
-        const { data, error } = await supabase
-          .from('post_likes')
-          .select('id')
-          .eq('post_id', postId)
-          .eq('user_id', userId)
-          .maybeSingle();
+        // Fetch total like count for this post
+        const { count, error: countError } = await supabase
+          .from('likes')
+          .select('*', { count: 'exact', head: true })
+          .eq('post_id', postId);
 
-        if (error) throw error;
-        setIsLiked(!!data);
+        if (countError) throw countError;
+        setLikeCount(count || 0);
+
+        // Check if current user has liked this post
+        if (userId) {
+          const { data, error } = await supabase
+            .from('likes')
+            .select('id')
+            .eq('post_id', postId)
+            .eq('user_id', userId)
+            .maybeSingle();
+
+          if (error) throw error;
+          setIsLiked(!!data);
+        } else {
+          setIsLiked(false);
+        }
       } catch (error) {
-        console.error('Error checking like status:', error);
+        console.error('Error fetching like data:', error);
       }
     };
 
-    checkIfLiked();
+    fetchLikeData();
   }, [postId, userId]);
 
   const toggleLike = async () => {
@@ -54,36 +63,36 @@ export function usePostLike({ postId, initialLikeCount, userId }: UsePostLikePro
       setIsLoading(true);
 
       if (isLiked) {
+        // Optimistically update UI
         setIsLiked(false);
         setLikeCount(prev => Math.max(0, prev - 1));
 
-        const { data, error } = await supabase.rpc('unlike_post', {
-          p_post_id: postId,
-          p_user_id: userId,
-        });
+        // Delete the like from database
+        const { error } = await supabase
+          .from('likes')
+          .delete()
+          .eq('post_id', postId)
+          .eq('user_id', userId);
 
         if (error) throw error;
-
-        if (data && typeof data.like_count === 'number') {
-          setLikeCount(data.like_count);
-        }
       } else {
+        // Optimistically update UI
         setIsLiked(true);
         setLikeCount(prev => prev + 1);
 
-        const { data, error } = await supabase.rpc('like_post', {
-          p_post_id: postId,
-          p_user_id: userId,
-        });
+        // Insert new like into database
+        const { error } = await supabase
+          .from('likes')
+          .insert({
+            post_id: postId,
+            user_id: userId,
+          });
 
         if (error) throw error;
-
-        if (data && typeof data.like_count === 'number') {
-          setLikeCount(data.like_count);
-        }
       }
     } catch (error: any) {
       console.error('Error toggling like:', error);
+      // Rollback on error
       setIsLiked(previousIsLiked);
       setLikeCount(previousLikeCount);
     } finally {

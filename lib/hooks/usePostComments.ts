@@ -5,7 +5,6 @@ import { RealtimeChannel } from '@supabase/supabase-js';
 type Profile = {
   id: string;
   username: string;
-  display_name: string | null;
   avatar_url: string | null;
 };
 
@@ -13,7 +12,7 @@ export type Comment = {
   id: string;
   post_id: string;
   user_id: string;
-  message: string;
+  content: string;
   created_at: string;
   profiles: Profile;
 };
@@ -42,13 +41,12 @@ export function usePostComments({ postId, userId }: UsePostCommentsProps): UsePo
       try {
         setLoading(true);
         const { data, error: fetchError } = await supabase
-          .from('post_comments')
+          .from('comments')
           .select(`
             *,
             profiles (
               id,
               username,
-              display_name,
               avatar_url
             )
           `)
@@ -75,25 +73,24 @@ export function usePostComments({ postId, userId }: UsePostCommentsProps): UsePo
 
     const setupRealtime = async () => {
       channel = supabase
-        .channel(`post-comments:${postId}`)
+        .channel(`comments:${postId}`)
         .on(
           'postgres_changes',
           {
             event: 'INSERT',
             schema: 'public',
-            table: 'post_comments',
+            table: 'comments',
             filter: `post_id=eq.${postId}`,
           },
           async (payload) => {
             // Fetch the new comment with profile data
             const { data: newComment } = await supabase
-              .from('post_comments')
+              .from('comments')
               .select(`
                 *,
                 profiles (
                   id,
                   username,
-                  display_name,
                   avatar_url
                 )
               `)
@@ -110,7 +107,7 @@ export function usePostComments({ postId, userId }: UsePostCommentsProps): UsePo
           {
             event: 'DELETE',
             schema: 'public',
-            table: 'post_comments',
+            table: 'comments',
             filter: `post_id=eq.${postId}`,
           },
           (payload) => {
@@ -134,10 +131,13 @@ export function usePostComments({ postId, userId }: UsePostCommentsProps): UsePo
       if (!userId || !message.trim()) return;
 
       try {
-        const { data, error: addError } = await supabase.rpc('add_comment_and_increment', {
-          p_post_id: postId,
-          p_message: message.trim(),
-        });
+        const { error: addError } = await supabase
+          .from('comments')
+          .insert({
+            post_id: postId,
+            user_id: userId,
+            content: message.trim(),
+          });
 
         if (addError) throw addError;
       } catch (err: any) {
@@ -153,15 +153,13 @@ export function usePostComments({ postId, userId }: UsePostCommentsProps): UsePo
       if (!userId) return;
 
       try {
-        const { data, error: deleteError } = await supabase.rpc('delete_comment_and_decrement', {
-          p_comment_id: commentId,
-        });
+        const { error: deleteError } = await supabase
+          .from('comments')
+          .delete()
+          .eq('id', commentId)
+          .eq('user_id', userId);
 
         if (deleteError) throw deleteError;
-        
-        if (data && !data.success) {
-          throw new Error(data.error || 'Failed to delete comment');
-        }
       } catch (err: any) {
         console.error('Error deleting comment:', err);
         throw err;
