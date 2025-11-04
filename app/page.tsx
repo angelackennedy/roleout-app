@@ -282,22 +282,40 @@ export default function Home() {
 
   const POSTS_PER_PAGE = 5;
 
-  const fetchPosts = async (pageNum: number) => {
-    setLoading(true);
-    try {
-      if (!user) {
-        const { data, error: fetchError } = await supabase
-          .from('posts')
-          .select(`
-            *,
-            profiles (
-              id,
-              username,
-              display_name,
-              avatar_url
-            )
-          `)
-          .order('created_at', { ascending: false })
+const containerRef = useRef<HTMLDivElement>(null);
+
+const POSTS_PER_PAGE = 5;
+
+const fetchPosts = async (pageNum: number) => {
+  setLoading(true);
+  try {
+    const { data, error: fetchError } = await supabase
+      .from('posts')
+      .select('id,user_id,video_url,caption,created_at')
+      .neq('video_url', null)
+      .neq('video_url', '')
+      .order('created_at', { ascending: false })
+      .range(pageNum * POSTS_PER_PAGE, (pageNum + 1) * POSTS_PER_PAGE - 1);
+
+    if (fetchError) throw fetchError;
+
+    if (data && data.length > 0) {
+      setPosts(prev => (pageNum === 0 ? data : [...prev, ...data]));
+      setHasMore(data.length === POSTS_PER_PAGE);
+    } else {
+      setHasMore(false);
+    }
+  } catch (err: any) {
+    console.error('Error fetching posts:', err);
+    setError(err?.message || 'Failed to load posts');
+    setHasMore(false);
+  } finally {
+    setLoading(false);
+  }
+};
+
+
+
           .range(pageNum * POSTS_PER_PAGE, (pageNum + 1) * POSTS_PER_PAGE - 1);
 
         if (fetchError) throw fetchError;
@@ -333,21 +351,15 @@ export default function Home() {
       const postIds = rankedPosts.map((rp: any) => rp.post_id);
 
       const { data: fullPosts, error: fetchError } = await supabase
-        .from('posts')
-        .select(`
-          *,
-          profiles (
-            id,
-            username,
-            display_name,
-            avatar_url
-          )
-        `)
-        .in('id', postIds);
+  .from('posts')
+  .select('id,user_id,video_url,caption,created_at')
+  .neq('video_url', null)
+  .neq('video_url', '')
+  .order('created_at', { ascending: false });
 
-      if (fetchError) {
-        throw fetchError;
-      }
+if (fetchError) {
+  throw fetchError;
+}
 
       if (fullPosts && fullPosts.length > 0) {
         const postsMap = new Map(fullPosts.map((p: Post) => [p.id, p]));

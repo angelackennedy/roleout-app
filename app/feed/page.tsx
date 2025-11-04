@@ -343,7 +343,7 @@ function CommentDrawer({
                 padding: "10px 20px",
                 opacity: !newComment.trim() || submitting ? 0.5 : 1,
                 cursor: !newComment.trim() || submitting ? "not-allowed" : "pointer",
-              }}
+          }}
             >
               {submitting ? "..." : "Post"}
             </button>
