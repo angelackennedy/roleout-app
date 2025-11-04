@@ -267,6 +267,12 @@ export async function processVideo(
       progress: 0,
       message: 'Processing failed',
     });
+    // fallback to raw upload
+    if (videoFile) {
+      // Fallback: upload the original file if ffmpeg.wasm fails
+      return { video: videoFile, thumbnail: null };
+    }
     return { video: null, thumbnail: null };
   }
 }
+
