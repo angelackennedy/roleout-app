@@ -36,6 +36,9 @@ export default function Header() {
               <Link href="/discover" className="hover:text-gray-400">
                 Discover
               </Link>
+              <Link href="/trending" className="hover:text-gray-400">
+                Trending
+              </Link>
               <Link href="/search" className="hover:text-gray-400">
                 Search
               </Link>
