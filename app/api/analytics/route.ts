@@ -232,9 +232,9 @@ export async function GET(request: NextRequest) {
 
     const { data: topPostsData, error: topPostsError } = await supabase
       .from('posts')
-      .select('id, caption, media_url, media_type, view_count, created_at')
+      .select('id, caption, video_url, image_url, created_at')
       .eq('user_id', userId)
-      .order('view_count', { ascending: false })
+      .order('like_count', { ascending: false })
       .limit(10);
 
     if (topPostsError) {
@@ -257,9 +257,14 @@ export async function GET(request: NextRequest) {
           .select('id')
           .eq('post_id', post.id);
 
+        const { data: postImpressions } = await supabase
+          .from('post_impressions')
+          .select('id')
+          .eq('post_id', post.id);
+
         const likesCount = postLikes?.length || 0;
         const commentsCount = postComments?.length || 0;
-        const viewCount = post.view_count || 0;
+        const viewCount = postImpressions?.length || 0;
         const engagementRate = viewCount > 0 
           ? ((likesCount + commentsCount) / viewCount) * 100 
           : 0;
@@ -267,8 +272,8 @@ export async function GET(request: NextRequest) {
         return {
           id: post.id,
           caption: post.caption,
-          media_url: post.media_url,
-          media_type: post.media_type,
+          media_url: post.video_url || post.image_url || '',
+          media_type: post.video_url ? 'video' : 'image',
           views: viewCount,
           likes: likesCount,
           comments: commentsCount,
