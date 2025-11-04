@@ -12,7 +12,6 @@ import { useVideoPreload } from '@/lib/hooks/useVideoPreload';
 type Profile = {
   id: string;
   username: string;
-  display_name: string | null;
   avatar_url: string | null;
 };
 
@@ -108,9 +107,6 @@ function VideoPost({ post, userId, index, currentIndex }: {
           </div>
           <div>
             <div style={{ fontWeight: 600, fontSize: 15 }}>
-              {post.profiles.display_name || post.profiles.username}
-            </div>
-            <div style={{ fontSize: 12, opacity: 0.8 }}>
               @{post.profiles.username}
             </div>
           </div>
@@ -282,46 +278,44 @@ export default function Home() {
 
   const POSTS_PER_PAGE = 5;
 
-const containerRef = useRef<HTMLDivElement>(null);
-
-const POSTS_PER_PAGE = 5;
-
-const fetchPosts = async (pageNum: number) => {
-  setLoading(true);
-  try {
-    const { data, error: fetchError } = await supabase
-      .from('posts')
-      .select('id,user_id,video_url,caption,created_at')
-      .neq('video_url', null)
-      .neq('video_url', '')
-      .order('created_at', { ascending: false })
-      .range(pageNum * POSTS_PER_PAGE, (pageNum + 1) * POSTS_PER_PAGE - 1);
-
-    if (fetchError) throw fetchError;
-
-    if (data && data.length > 0) {
-      setPosts(prev => (pageNum === 0 ? data : [...prev, ...data]));
-      setHasMore(data.length === POSTS_PER_PAGE);
-    } else {
-      setHasMore(false);
-    }
-  } catch (err: any) {
-    console.error('Error fetching posts:', err);
-    setError(err?.message || 'Failed to load posts');
-    setHasMore(false);
-  } finally {
-    setLoading(false);
-  }
-};
-
-
-
+  const fetchPosts = async (pageNum: number) => {
+    setLoading(true);
+    try {
+      // If no user, show simple chronological feed
+      if (!user) {
+        const { data, error: fetchError } = await supabase
+          .from('posts')
+          .select(`
+            id,
+            user_id,
+            video_url,
+            cover_url,
+            caption,
+            hashtags,
+            like_count,
+            comment_count,
+            share_count,
+            created_at,
+            profiles!posts_user_id_fkey (
+              id,
+              username,
+              avatar_url
+            )
+          `)
+          .not('video_url', 'is', null)
+          .neq('video_url', '')
+          .order('created_at', { ascending: false })
           .range(pageNum * POSTS_PER_PAGE, (pageNum + 1) * POSTS_PER_PAGE - 1);
 
         if (fetchError) throw fetchError;
 
         if (data && data.length > 0) {
-          setPosts((prev) => pageNum === 0 ? data : [...prev, ...data]);
+          // Transform the data to ensure profiles is a single object
+          const transformedData = data.map((post: any) => ({
+            ...post,
+            profiles: Array.isArray(post.profiles) ? post.profiles[0] : post.profiles
+          })) as Post[];
+          setPosts((prev) => pageNum === 0 ? transformedData : [...prev, ...transformedData]);
           setHasMore(data.length === POSTS_PER_PAGE);
         } else {
           setHasMore(false);
@@ -331,6 +325,7 @@ const fetchPosts = async (pageNum: number) => {
         return;
       }
 
+      // For logged-in users, try to use ranked feed
       const { data: rankedPosts, error: rankError } = await supabase
         .rpc('get_ranked_feed', {
           p_user_id: user.id,
@@ -339,7 +334,48 @@ const fetchPosts = async (pageNum: number) => {
         });
 
       if (rankError) {
-        throw rankError;
+        console.warn('Ranked feed error, falling back to chronological:', rankError);
+        // Fallback to chronological feed
+        const { data, error: fetchError } = await supabase
+          .from('posts')
+          .select(`
+            id,
+            user_id,
+            video_url,
+            cover_url,
+            caption,
+            hashtags,
+            like_count,
+            comment_count,
+            share_count,
+            created_at,
+            profiles!posts_user_id_fkey (
+              id,
+              username,
+              avatar_url
+            )
+          `)
+          .not('video_url', 'is', null)
+          .neq('video_url', '')
+          .order('created_at', { ascending: false })
+          .range(pageNum * POSTS_PER_PAGE, (pageNum + 1) * POSTS_PER_PAGE - 1);
+
+        if (fetchError) throw fetchError;
+
+        if (data && data.length > 0) {
+          // Transform the data to ensure profiles is a single object
+          const transformedData = data.map((post: any) => ({
+            ...post,
+            profiles: Array.isArray(post.profiles) ? post.profiles[0] : post.profiles
+          })) as Post[];
+          setPosts((prev) => pageNum === 0 ? transformedData : [...prev, ...transformedData]);
+          setHasMore(data.length === POSTS_PER_PAGE);
+        } else {
+          setHasMore(false);
+        }
+        
+        setLoading(false);
+        return;
       }
 
       if (!rankedPosts || rankedPosts.length === 0) {
@@ -351,18 +387,38 @@ const fetchPosts = async (pageNum: number) => {
       const postIds = rankedPosts.map((rp: any) => rp.post_id);
 
       const { data: fullPosts, error: fetchError } = await supabase
-  .from('posts')
-  .select('id,user_id,video_url,caption,created_at')
-  .neq('video_url', null)
-  .neq('video_url', '')
-  .order('created_at', { ascending: false });
+        .from('posts')
+        .select(`
+          id,
+          user_id,
+          video_url,
+          cover_url,
+          caption,
+          hashtags,
+          like_count,
+          comment_count,
+          share_count,
+          created_at,
+          profiles!posts_user_id_fkey (
+            id,
+            username,
+            avatar_url
+          )
+        `)
+        .in('id', postIds);
 
-if (fetchError) {
-  throw fetchError;
-}
+      if (fetchError) {
+        throw fetchError;
+      }
 
       if (fullPosts && fullPosts.length > 0) {
-        const postsMap = new Map(fullPosts.map((p: Post) => [p.id, p]));
+        // Transform the data to ensure profiles is a single object
+        const transformedPosts = fullPosts.map((post: any) => ({
+          ...post,
+          profiles: Array.isArray(post.profiles) ? post.profiles[0] : post.profiles
+        })) as Post[];
+        
+        const postsMap = new Map(transformedPosts.map((p: Post) => [p.id, p]));
         const orderedPosts = postIds
           .map((id: string) => postsMap.get(id))
           .filter((p: Post | undefined): p is Post => p !== undefined);
