@@ -14,7 +14,7 @@ type Sound = {
 type SoundPickerProps = {
   selectedSoundId: string | null;
   onSelectSound: (sound: Sound | null) => void;
-  audioRef?: React.RefObject<HTMLAudioElement>;
+  audioRef?: React.RefObject<HTMLAudioElement | null>;
 };
 
 export default function SoundPicker({ 

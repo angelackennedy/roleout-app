@@ -1,15 +1,20 @@
 import { createClient } from '@/lib/supabase-server';
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { productId: string } }
-) {
+export async function GET(request: any, context: any) {
   try {
     const supabase = await createClient();
-    const productId = params.productId;
+    const productId = context?.params?.productId;
+    
+    if (!productId) {
+      return NextResponse.json(
+        { error: 'Product ID is required' },
+        { status: 400 }
+      );
+    }
+    
     const searchParams = request.nextUrl.searchParams;
-    const context = searchParams.get('ref') || 'unknown';
+    const refContext = searchParams.get('ref') || 'unknown';
 
     const { data: { user } } = await supabase.auth.getUser();
 
@@ -29,7 +34,7 @@ export async function GET(
     const { error: rpcError } = await supabase.rpc('increment_product_clicks', {
       p_product_id: productId,
       p_user_id: user?.id || null,
-      p_context: context,
+      p_context: refContext,
     });
 
     if (rpcError) {

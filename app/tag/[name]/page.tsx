@@ -17,6 +17,7 @@ type Post = {
   like_count: number;
   comment_count: number;
   share_count: number;
+  view_count: number;
   created_at: string;
   username: string;
   display_name: string;
