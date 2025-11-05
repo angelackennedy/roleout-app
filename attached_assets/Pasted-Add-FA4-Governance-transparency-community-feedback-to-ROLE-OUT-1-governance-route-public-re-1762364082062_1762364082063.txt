@@ -1,0 +1,36 @@
+Add FA4 Governance (transparency + community feedback) to ROLE OUT.
+
+1) /governance route (public read):
+   - Show current algorithm weights used for FairScore (likes %, comments %, watch %).
+   - Show “Last updated” timestamp and version number.
+   - If user is admin, allow editing weights with small form and “Publish update” button.
+
+2) Database + API:
+   - Table public.algo_config (id uuid pk default gen_random_uuid(), version int, likes_weight numeric, comments_weight numeric, watch_weight numeric, updated_by uuid, updated_at timestamptz default now()).
+   - Seed one row (version 1, 0.4/0.4/0.2).
+   - API route /api/governance/config:
+       * GET returns latest config.
+       * POST (admin only) inserts new version row and returns it.
+
+3) Community fairness feedback:
+   - Table public.governance_feedback (id uuid pk default gen_random_uuid(), user_id uuid, fairness_score int check (fairness_score between 1 and 5), comment text, created_at timestamptz default now()).
+   - RLS: SELECT for all; INSERT if auth.uid() = user_id.
+   - On /governance, logged-in users can submit a fairness rating (1–5) once per 7 days; optional comment.
+
+4) Weekly chart:
+   - Show chart of average fairness_score by week (last 8 weeks).
+   - Display total votes and average.
+
+5) Changelog:
+   - Table public.algo_changelog (id uuid pk default gen_random_uuid(), version int, description text, created_at timestamptz default now()).
+   - On admin publish, create a changelog row with short description (e.g., “Raised watch weight from 0.2 → 0.3”).
+
+6) Integration with feed:
+   - Replace any hardcoded weights used in FairScore with the latest values from algo_config.
+   - Cache for 5 minutes client-side to avoid extra calls.
+
+7) Admin guard:
+   - Add isAdmin() util (simple email allowlist env: NEXT_PUBLIC_ADMIN_EMAILS = comma-separated).
+   - Only admins see the “Publish update” form.
+
+Keep TypeScript + Tailwind. Reuse supabase client at lib/supabase.ts. Handle empty states with toasts/skeletons; no global CSS changes.
