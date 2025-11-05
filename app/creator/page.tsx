@@ -74,6 +74,12 @@ type MallStats = {
   totalSales: number;
   totalRevenue: number;
   productsCount: number;
+  topProducts: Array<{
+    id: string;
+    title: string;
+    clicks: number;
+    last_click_at: string | null;
+  }>;
 };
 
 export default function CreatorDashboard() {
@@ -115,20 +121,11 @@ export default function CreatorDashboard() {
     if (!user) return;
 
     try {
-      const response = await fetch('/api/mall/my-products', { cache: 'no-store' });
+      const response = await fetch('/api/mall/stats', { cache: 'no-store' });
       
       if (response.ok) {
-        const { products } = await response.json();
-        const totalClicks = products.reduce((sum: number, p: any) => sum + p.clicks, 0);
-        const totalSales = products.reduce((sum: number, p: any) => sum + p.sales, 0);
-        const totalRevenue = products.reduce((sum: number, p: any) => sum + (p.price * p.sales), 0);
-        
-        setMallStats({
-          totalClicks,
-          totalSales,
-          totalRevenue,
-          productsCount: products.length,
-        });
+        const stats = await response.json();
+        setMallStats(stats);
       }
     } catch (err) {
       console.error('Error fetching mall stats:', err);
@@ -242,34 +239,66 @@ export default function CreatorDashboard() {
         </div>
 
         {mallStats && mallStats.productsCount > 0 && (
-          <Link
-            href="/mall/manage"
-            className="bg-gradient-to-br from-indigo-600 to-indigo-800 rounded-xl p-6 shadow-lg mb-8 block hover:shadow-xl transition"
-          >
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <div className="text-sm font-semibold text-indigo-200 mb-1">🛍️ Mall Performance</div>
-                <div className="text-4xl font-bold">{mallStats.productsCount} Products</div>
+          <>
+            <Link
+              href="/mall/manage"
+              className="bg-gradient-to-br from-indigo-600 to-indigo-800 rounded-xl p-6 shadow-lg mb-4 block hover:shadow-xl transition"
+            >
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <div className="text-sm font-semibold text-indigo-200 mb-1">🛍️ Mall Performance</div>
+                  <div className="text-4xl font-bold">{mallStats.productsCount} Products</div>
+                </div>
+                <div className="text-right">
+                  <div className="text-2xl font-bold text-yellow-400">${mallStats.totalRevenue.toFixed(2)}</div>
+                  <div className="text-xs text-indigo-200">Total Revenue</div>
+                </div>
               </div>
-              <div className="text-right">
-                <div className="text-2xl font-bold text-yellow-400">${mallStats.totalRevenue.toFixed(2)}</div>
-                <div className="text-xs text-indigo-200">Total Revenue</div>
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <div className="text-indigo-200 opacity-75">Total Clicks (Tracked)</div>
+                  <div className="font-bold text-lg">{mallStats.totalClicks}</div>
+                </div>
+                <div>
+                  <div className="text-indigo-200 opacity-75">Sales</div>
+                  <div className="font-bold text-lg">{mallStats.totalSales}</div>
+                </div>
               </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <div className="text-indigo-200 opacity-75">Clicks</div>
-                <div className="font-bold text-lg">{mallStats.totalClicks}</div>
+              <div className="mt-4 text-xs text-indigo-200 opacity-75 text-center">
+                Click to manage your products →
               </div>
-              <div>
-                <div className="text-indigo-200 opacity-75">Sales</div>
-                <div className="font-bold text-lg">{mallStats.totalSales}</div>
+            </Link>
+            
+            {mallStats.topProducts && mallStats.topProducts.length > 0 && (
+              <div className="bg-gradient-to-br from-purple-900 to-indigo-900 rounded-xl p-6 shadow-lg mb-8">
+                <h3 className="text-lg font-semibold mb-4 text-purple-200">📊 Top Products by Clicks</h3>
+                <div className="space-y-3">
+                  {mallStats.topProducts.map((product, index) => (
+                    <div
+                      key={product.id}
+                      className="flex items-center justify-between bg-black bg-opacity-20 rounded-lg p-3"
+                    >
+                      <div className="flex items-center gap-3 flex-1">
+                        <div className="text-2xl font-bold text-yellow-400 w-8">#{index + 1}</div>
+                        <div className="flex-1">
+                          <div className="font-semibold text-white line-clamp-1">{product.title}</div>
+                          {product.last_click_at && (
+                            <div className="text-xs text-purple-300">
+                              Last click: {new Date(product.last_click_at).toLocaleDateString()}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="font-bold text-xl text-purple-200">{product.clicks}</div>
+                        <div className="text-xs text-purple-400">clicks</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
-            <div className="mt-4 text-xs text-indigo-200 opacity-75 text-center">
-              Click to manage your products →
-            </div>
-          </Link>
+            )}
+          </>
         )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
