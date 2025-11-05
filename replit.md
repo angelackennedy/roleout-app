@@ -4,25 +4,33 @@
 RollCall is a video-based social platform focused on authenticity and transparent moderation. Built with Next.js 14, TypeScript, Supabase, and Tailwind CSS.
 
 ## Recent Changes
-- **2025-11-05**: ROLL OUT Mall (E-commerce Integration)
+- **2025-11-05**: ROLL OUT Mall (E-commerce Integration) + Affiliate Mode
   - Created mall_products table with product info and engagement metrics
   - Built /mall page with product grid ordered by clicks, sales, views
   - Created /mall/manage page for creator product management with stats
   - **Creator Storefronts**:
-    - Dynamic route /mall/@[username] showing creator's products and stats
+    - Dynamic route /mall/[username] showing creator's products and stats
     - Profile header with avatar, bio, follow button, and engagement stats
     - Product grid with "View Post" and "Buy Now" actions
     - Shopping chip on posts linking to creator's storefront when products exist
     - "My Store" link in header for authenticated users
     - Loading skeletons and empty states for better UX
+  - **Affiliate Mode**:
+    - Created mall_affiliates table for network management (Shareasale, Amazon, CJ, etc)
+    - Created mall_clicks table for detailed click tracking with referral sources
+    - All "Buy" buttons redirect through /api/mall/click/[productId]?ref={context}
+    - Click tracking API uses SECURITY DEFINER RPC for secure atomic increments
+    - Creator Dashboard shows Total Clicks (tracked) and Top Products table with clicks + last_click_at
+    - Storefront product cards show "Affiliate" badge for affiliate products
+    - Referral contexts: 'feed', 'storefront', 'post', 'mall' for source attribution
   - Added Mall Performance card to Creator Dashboard showing revenue, clicks, sales
-  - API routes: /api/mall/products, /api/mall/my-products, /api/mall/add-product, /api/mall/track-click
+  - API routes: /api/mall/products, /api/mall/my-products, /api/mall/add-product, /api/mall/click/[productId], /api/mall/stats
   - **Security**: All mall APIs require authentication
     - Product management APIs scope to creator_id
-    - Click tracking uses SECURITY DEFINER function `increment_product_clicks()`
+    - Click tracking uses SECURITY DEFINER function `increment_product_clicks(p_product_id, p_user_id)`
     - Atomic increments prevent race conditions and unauthorized manipulation
   - **Note**: After creating new tables, run `NOTIFY pgrst, 'reload schema';` to refresh Supabase PostgREST cache
-  - Products include title, description, price, product_url, image_url
+  - Products include title, description, price, product_url, image_url, network (affiliate), tracking_url
   - Engagement tracking: clicks, sales, views for analytics
 
 - **2025-11-03**: Reporting & Personal Hide
@@ -139,11 +147,15 @@ RollCall is a video-based social platform focused on authenticity and transparen
 - `moderation_actions` - Public moderation log
 - `flags` - User-submitted content reports
 - `mall_products` - E-commerce products attached to posts with engagement tracking
+- `mall_affiliates` - Affiliate network reference data (Shareasale, Amazon, CJ)
+- `mall_clicks` - Click tracking with user_id, product_id, context, timestamp
 - `payout_history` - Creator earnings history with weekly aggregation
 - `fairness_votes` - Community voting on algorithm fairness
 
 ### Database Functions
-- `increment_product_clicks(p_product_id UUID, p_user_id UUID)` - SECURITY DEFINER function for safe, atomic click tracking
+- `increment_product_clicks(p_product_id UUID, p_user_id UUID)` - SECURITY DEFINER function for safe, atomic click tracking with mall_clicks table insert
+- `get_ranked_feed(p_user_id UUID, limit_count INT)` - Personalized feed ranking with engagement scoring
+- `get_or_create_conversation(...)` - Idempotent DM conversation creation
 
 ### File Structure
 ```
