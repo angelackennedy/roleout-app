@@ -4,6 +4,17 @@
 RollCall is a video-based social platform focused on authenticity and transparent moderation. Built with Next.js 14, TypeScript, Supabase, and Tailwind CSS.
 
 ## Recent Changes
+- **2025-11-05**: ROLL OUT Mall (E-commerce Integration)
+  - Created mall_products table with product info and engagement metrics
+  - Built /mall page with product grid ordered by clicks, sales, views
+  - Created /mall/manage page for creator product management with stats
+  - Added Mall Performance card to Creator Dashboard showing revenue, clicks, sales
+  - API routes: /api/mall/products, /api/mall/my-products, /api/mall/add-product, /api/mall/track-click
+  - **Note**: After creating new tables, run `NOTIFY pgrst, 'reload schema';` to refresh Supabase PostgREST cache
+  - Products include title, description, price, product_url, image_url
+  - Engagement tracking: clicks, sales, views for analytics
+  - Security: All mall APIs require authentication and scope to creator_id
+
 - **2025-11-03**: Reporting & Personal Hide
   - Added hidden_posts table for personal content filtering
   - Post menu now includes "Hide this post" and "Report" buttons
@@ -117,6 +128,9 @@ RollCall is a video-based social platform focused on authenticity and transparen
 - `comments` - Post comments (with triggers for count updates)
 - `moderation_actions` - Public moderation log
 - `flags` - User-submitted content reports
+- `mall_products` - E-commerce products attached to posts with engagement tracking
+- `payout_history` - Creator earnings history with weekly aggregation
+- `fairness_votes` - Community voting on algorithm fairness
 
 ### File Structure
 ```
