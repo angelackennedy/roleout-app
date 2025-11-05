@@ -9,48 +9,42 @@ export async function GET(
     const supabase = await createClient();
     const productId = params.productId;
     const searchParams = request.nextUrl.searchParams;
-    const ref = searchParams.get('ref');
+    const context = searchParams.get('ref') || 'unknown';
 
-    // Get user (may be null for logged-out users)
     const { data: { user } } = await supabase.auth.getUser();
 
-    // Track click
-    const { error: clickError } = await supabase
-      .from('mall_clicks')
-      .insert({
-        product_id: productId,
-        user_id: user?.id || null,
-        ref: ref || null,
-      });
-
-    if (clickError) {
-      console.error('Error tracking click:', clickError);
-    }
-
-    // Get product and affiliate info
-    const { data: product } = await supabase
+    const { data: product, error: productError } = await supabase
       .from('mall_products')
-      .select('product_url')
+      .select('product_url, network, tracking_url')
       .eq('id', productId)
       .single();
 
-    const { data: affiliate } = await supabase
-      .from('mall_affiliates')
-      .select('tracking_url')
-      .eq('product_id', productId)
-      .single();
-
-    // Redirect to affiliate tracking URL if exists, otherwise product URL
-    const redirectUrl = affiliate?.tracking_url || product?.product_url;
-
-    if (!redirectUrl) {
+    if (productError || !product) {
       return NextResponse.json(
-        { error: 'Product not found or no URL available' },
+        { error: 'Product not found' },
         { status: 404 }
       );
     }
 
-    // Return 302 redirect
+    const { error: rpcError } = await supabase.rpc('increment_product_clicks', {
+      p_product_id: productId,
+      p_user_id: user?.id || null,
+      p_context: context,
+    });
+
+    if (rpcError) {
+      console.error('Error calling increment_product_clicks RPC:', rpcError);
+    }
+
+    const redirectUrl = product.tracking_url || product.product_url;
+
+    if (!redirectUrl) {
+      return NextResponse.json(
+        { error: 'No product URL available' },
+        { status: 404 }
+      );
+    }
+
     return NextResponse.redirect(redirectUrl, { status: 302 });
   } catch (error) {
     console.error('Click tracking error:', error);
