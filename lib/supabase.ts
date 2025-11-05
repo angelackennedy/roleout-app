@@ -334,6 +334,50 @@ export type Database = {
           created_at?: string;
         };
       };
+      mall_products: {
+        Row: {
+          id: string;
+          post_id: string;
+          creator_id: string;
+          title: string;
+          description: string | null;
+          price: number;
+          product_url: string | null;
+          image_url: string | null;
+          clicks: number;
+          sales: number;
+          views: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          post_id: string;
+          creator_id: string;
+          title: string;
+          description?: string | null;
+          price: number;
+          product_url?: string | null;
+          image_url?: string | null;
+          clicks?: number;
+          sales?: number;
+          views?: number;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          post_id?: string;
+          creator_id?: string;
+          title?: string;
+          description?: string | null;
+          price?: number;
+          product_url?: string | null;
+          image_url?: string | null;
+          clicks?: number;
+          sales?: number;
+          views?: number;
+          created_at?: string;
+        };
+      };
     };
     Views: {
       post_metrics: {
