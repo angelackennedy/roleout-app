@@ -44,12 +44,38 @@ type AnalyticsData = {
   }>;
 };
 
+type EarningsData = {
+  totalEarnings: number;
+  totalViews: number;
+  postsCount: number;
+  posts: Array<{
+    id: string;
+    title: string;
+    videoUrl: string | null;
+    imageUrl: string | null;
+    views: number;
+    likes: number;
+    comments: number;
+    fairScore: number;
+    earnings: number;
+    createdAt: string;
+  }>;
+  weeklyHistory: Array<{
+    weekStart: string;
+    weekEnd: string;
+    earnings: number;
+    impressions: number;
+    postsCount: number;
+  }>;
+};
+
 export default function CreatorDashboard() {
   const { user } = useAuth();
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [timePeriod, setTimePeriod] = useState<TimePeriod>(30);
   const [data, setData] = useState<AnalyticsData | null>(null);
+  const [earningsData, setEarningsData] = useState<EarningsData | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -58,7 +84,24 @@ export default function CreatorDashboard() {
       return;
     }
     fetchAnalytics();
+    fetchEarnings();
   }, [user, timePeriod]);
+
+  const fetchEarnings = async () => {
+    if (!user) return;
+
+    try {
+      const url = `/api/earnings?userId=${user.id}`;
+      const response = await fetch(url, { cache: 'no-store' });
+      
+      if (response.ok) {
+        const earningsResponse = await response.json();
+        setEarningsData(earningsResponse);
+      }
+    } catch (err) {
+      console.error('Error fetching earnings:', err);
+    }
+  };
 
   const fetchAnalytics = async () => {
     if (!user) {
@@ -228,6 +271,26 @@ export default function CreatorDashboard() {
           </div>
         </div>
 
+        {earningsData && (
+          <div className="bg-gradient-to-br from-yellow-600 to-amber-800 rounded-xl p-6 shadow-lg mb-8">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <div className="text-sm font-semibold text-yellow-200 mb-1">💰 Fair Earnings (Demo)</div>
+                <div className="text-5xl font-bold">${earningsData.totalEarnings.toLocaleString()}</div>
+              </div>
+              <div className="text-right">
+                <div className="text-xs text-yellow-200 opacity-75 mb-2">Formula: Views × FairScore × 0.001</div>
+                <div className="text-sm text-yellow-100">
+                  {earningsData.postsCount} posts • {earningsData.totalViews.toLocaleString()} views
+                </div>
+              </div>
+            </div>
+            <div className="text-xs text-yellow-200 opacity-75 border-t border-yellow-500/30 pt-3">
+              This is a demo calculation. Real payouts would integrate with payment providers like Stripe Connect.
+            </div>
+          </div>
+        )}
+
         {/* Creator Monetization Links */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
           <Link 
@@ -385,6 +448,118 @@ export default function CreatorDashboard() {
                 />
               </LineChart>
             </ResponsiveContainer>
+          </div>
+        )}
+
+        {earningsData && earningsData.posts.length > 0 && (
+          <div className="bg-gray-800 rounded-xl p-6 shadow-lg mb-8">
+            <h2 className="text-2xl font-bold mb-4">Per-Post Earnings Breakdown</h2>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-gray-700">
+                    <th className="text-left py-3 px-2 text-sm font-semibold text-gray-300">Post</th>
+                    <th className="text-right py-3 px-2 text-sm font-semibold text-gray-300">Views</th>
+                    <th className="text-right py-3 px-2 text-sm font-semibold text-gray-300">Likes</th>
+                    <th className="text-right py-3 px-2 text-sm font-semibold text-gray-300">FairScore</th>
+                    <th className="text-right py-3 px-2 text-sm font-semibold text-gray-300">Earnings</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {earningsData.posts.map((post) => (
+                    <tr key={post.id} className="border-b border-gray-700 hover:bg-gray-700/50 transition">
+                      <td className="py-3 px-2">
+                        <Link href={`/post/${post.id}`} className="flex items-center gap-3 hover:text-yellow-400 transition">
+                          <div className="w-16 h-16 rounded-lg overflow-hidden bg-gray-700 flex-shrink-0">
+                            {post.videoUrl ? (
+                              <video 
+                                src={post.videoUrl} 
+                                className="w-full h-full object-cover"
+                                muted
+                              />
+                            ) : post.imageUrl ? (
+                              <img 
+                                src={post.imageUrl} 
+                                alt="Post thumbnail"
+                                className="w-full h-full object-cover"
+                              />
+                            ) : null}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-medium truncate">
+                              {post.title}
+                            </div>
+                            <div className="text-xs text-gray-400">
+                              {new Date(post.createdAt).toLocaleDateString()}
+                            </div>
+                          </div>
+                        </Link>
+                      </td>
+                      <td className="py-3 px-2 text-right font-mono text-sm">
+                        {post.views.toLocaleString()}
+                      </td>
+                      <td className="py-3 px-2 text-right font-mono text-sm">
+                        {post.likes.toLocaleString()}
+                      </td>
+                      <td className="py-3 px-2 text-right">
+                        <span className={`font-bold text-sm ${
+                          post.fairScore >= 0.7 ? 'text-green-400' :
+                          post.fairScore >= 0.4 ? 'text-yellow-400' :
+                          'text-gray-400'
+                        }`}>
+                          {post.fairScore.toFixed(3)}
+                        </span>
+                      </td>
+                      <td className="py-3 px-2 text-right">
+                        <span className="font-bold text-yellow-400">
+                          ${post.earnings.toFixed(2)}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {earningsData && earningsData.weeklyHistory.length > 0 && (
+          <div className="bg-gray-800 rounded-xl p-6 shadow-lg mb-8">
+            <h2 className="text-2xl font-bold mb-4">Fair Payout History (Weekly)</h2>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-gray-700">
+                    <th className="text-left py-3 px-2 text-sm font-semibold text-gray-300">Week</th>
+                    <th className="text-right py-3 px-2 text-sm font-semibold text-gray-300">Posts</th>
+                    <th className="text-right py-3 px-2 text-sm font-semibold text-gray-300">Impressions</th>
+                    <th className="text-right py-3 px-2 text-sm font-semibold text-gray-300">Earnings</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {earningsData.weeklyHistory.map((week, index) => (
+                    <tr key={index} className="border-b border-gray-700 hover:bg-gray-700/50 transition">
+                      <td className="py-3 px-2">
+                        <div className="text-sm font-medium">
+                          {new Date(week.weekStart).toLocaleDateString()} - {new Date(week.weekEnd).toLocaleDateString()}
+                        </div>
+                      </td>
+                      <td className="py-3 px-2 text-right font-mono text-sm">
+                        {week.postsCount}
+                      </td>
+                      <td className="py-3 px-2 text-right font-mono text-sm">
+                        {week.impressions.toLocaleString()}
+                      </td>
+                      <td className="py-3 px-2 text-right">
+                        <span className="font-bold text-yellow-400">
+                          ${week.earnings.toFixed(2)}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
 
