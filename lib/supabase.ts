@@ -253,6 +253,55 @@ export type Database = {
           created_at?: string;
         };
       };
+      governance_feedback: {
+        Row: {
+          id: string;
+          user_id: string;
+          fairness_score: number;
+          comment: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          fairness_score: number;
+          comment?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          fairness_score?: number;
+          comment?: string | null;
+          created_at?: string;
+        };
+      };
+      algorithm_changelog: {
+        Row: {
+          id: string;
+          version: string;
+          description: string;
+          changes: any;
+          created_at: string;
+          created_by: string | null;
+        };
+        Insert: {
+          id?: string;
+          version: string;
+          description: string;
+          changes?: any;
+          created_at?: string;
+          created_by?: string | null;
+        };
+        Update: {
+          id?: string;
+          version?: string;
+          description?: string;
+          changes?: any;
+          created_at?: string;
+          created_by?: string | null;
+        };
+      };
     };
     Views: {
       post_metrics: {
