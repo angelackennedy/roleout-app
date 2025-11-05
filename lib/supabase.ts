@@ -201,6 +201,76 @@ export type Database = {
           viewers?: number;
         };
       };
+      algorithm_weights: {
+        Row: {
+          id: string;
+          likes_weight: number;
+          comments_weight: number;
+          watch_completion_weight: number;
+          updated_at: string;
+          updated_by: string | null;
+        };
+        Insert: {
+          id?: string;
+          likes_weight?: number;
+          comments_weight?: number;
+          watch_completion_weight?: number;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Update: {
+          id?: string;
+          likes_weight?: number;
+          comments_weight?: number;
+          watch_completion_weight?: number;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+      };
+      feed_audit: {
+        Row: {
+          id: string;
+          user_id: string | null;
+          post_id: string | null;
+          rank_reason: string | null;
+          score: number | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id?: string | null;
+          post_id?: string | null;
+          rank_reason?: string | null;
+          score?: number | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string | null;
+          post_id?: string | null;
+          rank_reason?: string | null;
+          score?: number | null;
+          created_at?: string;
+        };
+      };
+    };
+    Views: {
+      post_metrics: {
+        Row: {
+          id: string;
+          user_id: string;
+          caption: string | null;
+          video_url: string | null;
+          image_url: string | null;
+          created_at: string;
+          likes: number;
+          comments: number;
+          impressions: number;
+          avg_watch_ms: number;
+          watch_completion: number;
+          fair_score: number;
+        };
+      };
     };
   };
 };

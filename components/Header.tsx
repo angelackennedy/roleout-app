@@ -88,6 +88,9 @@ export default function Header() {
               <Link href="/creator" className="hover:text-gray-400">
                 Analytics
               </Link>
+              <Link href="/transparency" className="hover:text-gray-400">
+                Transparency
+              </Link>
               <Link href="/sounds" className="hover:text-gray-400">
                 Sounds
               </Link>

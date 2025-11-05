@@ -6,6 +6,8 @@ import { MODE, PAGE_SIZE } from "@/lib/config";
 import { initLocalDB, listPosts, likePost, listComments, addComment, commentsChannel } from "@/lib/localdb";
 import { useAuth } from "@/lib/auth-context";
 import { PostItem } from "@/components/PostItem";
+import { FairScore } from "@/components/FairScore";
+import { useFairScores } from "@/lib/hooks/useFairScores";
 
 let supabase: any = null;
 if (MODE === "supabase") {
@@ -388,6 +390,9 @@ export default function FeedPage() {
   const viewportObserverRef = useRef<IntersectionObserver | null>(null);
   const postRefsMap = useRef<Map<string, HTMLDivElement>>(new Map());
   const videoRefsMap = useRef<Map<string, HTMLVideoElement>>(new Map());
+  
+  const postIds = posts.map(p => p.id);
+  const { fairScores } = useFairScores(MODE === "supabase" ? postIds : []);
 
   useEffect(() => {
     fetchPosts();
@@ -498,6 +503,49 @@ export default function FeedPage() {
       console.error("Error fetching likes:", error);
     }
   };
+
+  const logFeedAudit = async (posts: Post[], scores: Map<string, any>) => {
+    if (MODE !== "supabase" || !user || posts.length === 0) return;
+
+    try {
+      const auditRecords = posts.slice(0, 10).map((post, index) => {
+        const scoreData = scores.get(post.id);
+        const score = scoreData?.fair_score || 0;
+        
+        let reason = 'Recent post';
+        if (scoreData) {
+          if (score > 0.5) {
+            reason = 'High engagement score';
+          } else if (scoreData.impressions > 100) {
+            reason = 'High view count';
+          } else if (scoreData.watch_completion > 0.8) {
+            reason = 'High watch completion';
+          }
+        }
+
+        return {
+          user_id: user.id,
+          post_id: post.id,
+          rank_reason: `${reason} (rank #${index + 1})`,
+          score: score,
+        };
+      });
+
+      await fetch('/api/feed-audit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ audits: auditRecords }),
+      });
+    } catch (error) {
+      console.error('Error logging feed audit:', error);
+    }
+  };
+
+  useEffect(() => {
+    if (MODE === "supabase" && posts.length > 0 && fairScores.size > 0) {
+      logFeedAudit(posts, fairScores);
+    }
+  }, [posts.length, fairScores.size]);
 
   const fetchPosts = async (loadMore = false) => {
     try {
@@ -1071,9 +1119,18 @@ export default function FeedPage() {
                         </div>
                       </div>
                       {getPostCaption(post) && (
-                        <p style={{ margin: 0, fontSize: 14, lineHeight: 1.4, opacity: 0.95 }}>
+                        <p style={{ margin: "0 0 8px 0", fontSize: 14, lineHeight: 1.4, opacity: 0.95 }}>
                           {getPostCaption(post)}
                         </p>
+                      )}
+                      {MODE === "supabase" && fairScores.has(post.id) && (
+                        <FairScore
+                          score={fairScores.get(post.id)!.fair_score}
+                          likes={fairScores.get(post.id)!.likes}
+                          comments={fairScores.get(post.id)!.comments}
+                          impressions={fairScores.get(post.id)!.impressions}
+                          watchCompletion={fairScores.get(post.id)!.watch_completion}
+                        />
                       )}
                     </div>
                   </Link>
