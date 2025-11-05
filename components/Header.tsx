@@ -30,6 +30,9 @@ export default function Header() {
 
           {user && (
             <>
+              <Link href="/mall" className="hover:text-gray-400">
+                🛍️ Mall
+              </Link>
               <Link href="/following" className="hover:text-gray-400">
                 Following
               </Link>
