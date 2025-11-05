@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth-context';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
+import Breadcrumb from '@/components/Breadcrumb';
 
 type Profile = {
   id: string;
@@ -281,6 +282,13 @@ export default function CreatorStorefront() {
       padding: '40px 20px',
     }}>
       <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+        <Breadcrumb 
+          items={[
+            { label: 'Mall', href: '/mall' },
+            { label: `@${profile.username}'s Store` }
+          ]}
+        />
+        
         <div style={{
           background: 'rgba(26, 26, 26, 0.8)',
           border: '1px solid rgba(212, 175, 55, 0.3)',

@@ -7,6 +7,7 @@ import { useFollow } from '@/lib/hooks/useFollow';
 import Link from 'next/link';
 import Header from '@/components/Header';
 import { useRouter } from 'next/navigation';
+import EmptyState from '@/components/EmptyState';
 
 type Profile = {
   id: string;
@@ -348,15 +349,15 @@ export default function TrendingPage() {
             {error}
           </div>
         ) : posts.length === 0 ? (
-          <div style={{
-            padding: 60,
-            textAlign: 'center',
-            color: 'rgba(255,255,255,0.5)',
-          }}>
-            <div style={{ fontSize: 64, marginBottom: 20 }}>📊</div>
-            <div style={{ fontSize: 20, marginBottom: 10 }}>No trending posts yet</div>
-            <div style={{ fontSize: 14 }}>Check back soon!</div>
-          </div>
+          <EmptyState 
+            icon="🔥"
+            title="No trending posts yet"
+            description="The trending feed shows the most popular videos based on likes and comments. Be the first to create viral content and top the charts!"
+            actions={[
+              { label: 'Create Trending Content', href: '/upload', primary: true },
+              { label: 'Browse Discover', href: '/discover' },
+            ]}
+          />
         ) : (
           <div style={{
             display: 'grid',

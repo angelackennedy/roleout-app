@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { useParams } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import VideoPost from '@/components/VideoPost';
+import Link from 'next/link';
 
 type Post = {
   id: string;
@@ -200,14 +201,30 @@ export default function TagPage() {
         padding: '16px 20px',
         borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
       }}>
-        <h1 style={{
-          fontSize: 20,
-          fontWeight: 600,
-          margin: 0,
-          color: 'white',
-        }}>
-          #{tagName}
-        </h1>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <Link 
+            href="/"
+            style={{
+              padding: '8px 12px',
+              background: 'rgba(255, 255, 255, 0.1)',
+              borderRadius: 8,
+              color: 'white',
+              textDecoration: 'none',
+              fontSize: 14,
+              fontWeight: 500,
+            }}
+          >
+            ← Home
+          </Link>
+          <h1 style={{
+            fontSize: 20,
+            fontWeight: 600,
+            margin: 0,
+            color: 'white',
+          }}>
+            #{tagName}
+          </h1>
+        </div>
       </div>
 
       {posts.map((post, index) => (

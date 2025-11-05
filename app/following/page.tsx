@@ -9,6 +9,7 @@ import { usePostLike } from '@/lib/hooks/usePostLike';
 import { CommentsDrawer } from '@/components/CommentsDrawer';
 import { useRouter } from 'next/navigation';
 import { useVideoPreload } from '@/lib/hooks/useVideoPreload';
+import EmptyState from '@/components/EmptyState';
 
 type Profile = {
   id: string;
@@ -504,36 +505,16 @@ export default function FollowingFeed() {
 
   if (posts.length === 0 && !loading) {
     return (
-      <div style={{
-        height: '100vh',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: '#000',
-        color: 'white',
-        padding: 20,
-      }}>
-        <div style={{ fontSize: 64, marginBottom: 20 }}>👥</div>
-        <div style={{ fontSize: 24, marginBottom: 8, fontWeight: 600 }}>You're not following anyone yet</div>
-        <div style={{ fontSize: 16, marginBottom: 30, opacity: 0.8 }}>
-          Follow some users to see their posts here!
-        </div>
-        <Link
-          href="/"
-          style={{
-            background: 'linear-gradient(135deg, rgba(212,175,55,0.8) 0%, rgba(212,175,55,0.6) 100%)',
-            border: '2px solid rgba(255,255,255,0.3)',
-            borderRadius: 8,
-            padding: '14px 28px',
-            color: 'white',
-            textDecoration: 'none',
-            fontSize: 16,
-            fontWeight: 600,
-          }}
-        >
-          Explore For You feed
-        </Link>
+      <div style={{ background: '#000', minHeight: '100vh' }}>
+        <EmptyState 
+          icon="👥"
+          title="You're not following anyone yet"
+          description="Follow some creators to see their videos here! Discover amazing content creators in the For You feed or Discover page."
+          actions={[
+            { label: 'Explore For You Feed', href: '/', primary: true },
+            { label: 'Browse Discover', href: '/discover' },
+          ]}
+        />
       </div>
     );
   }
