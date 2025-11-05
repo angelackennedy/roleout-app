@@ -16,6 +16,8 @@ type ManagedProduct = {
   clicks: number;
   sales: number;
   views: number;
+  network: string | null;
+  tracking_url: string | null;
   created_at: string;
 };
 
@@ -29,6 +31,22 @@ export default function MallManagePage() {
     totalClicks: 0,
     totalSales: 0,
     totalRevenue: 0,
+  });
+  const [editingProduct, setEditingProduct] = useState<ManagedProduct | null>(null);
+  const [affiliateProduct, setAffiliateProduct] = useState<ManagedProduct | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const [editForm, setEditForm] = useState({
+    title: '',
+    description: '',
+    price: 0,
+    productUrl: '',
+    imageUrl: '',
+  });
+
+  const [affiliateForm, setAffiliateForm] = useState({
+    network: '',
+    trackingUrl: '',
   });
 
   useEffect(() => {
@@ -64,6 +82,91 @@ export default function MallManagePage() {
     }
   };
 
+  const handleEditClick = (product: ManagedProduct) => {
+    setEditingProduct(product);
+    setEditForm({
+      title: product.title,
+      description: product.description || '',
+      price: product.price,
+      productUrl: product.product_url || '',
+      imageUrl: product.image_url || '',
+    });
+  };
+
+  const handleAffiliateClick = (product: ManagedProduct) => {
+    setAffiliateProduct(product);
+    setAffiliateForm({
+      network: product.network || '',
+      trackingUrl: product.tracking_url || '',
+    });
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingProduct) return;
+
+    setSaving(true);
+    try {
+      const response = await fetch('/api/mall/update-product', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          productId: editingProduct.id,
+          title: editForm.title,
+          description: editForm.description,
+          price: editForm.price,
+          productUrl: editForm.productUrl,
+          imageUrl: editForm.imageUrl,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update product');
+      }
+
+      await fetchMyProducts();
+      setEditingProduct(null);
+    } catch (err: any) {
+      console.error('Error updating product:', err);
+      alert(err.message || 'Failed to update product');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSaveAffiliate = async () => {
+    if (!affiliateProduct) return;
+
+    if (!affiliateForm.network || !affiliateForm.trackingUrl) {
+      alert('Network and tracking URL are required');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const response = await fetch('/api/mall/set-affiliate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          productId: affiliateProduct.id,
+          network: affiliateForm.network,
+          trackingUrl: affiliateForm.trackingUrl,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to set affiliate');
+      }
+
+      await fetchMyProducts();
+      setAffiliateProduct(null);
+    } catch (err: any) {
+      console.error('Error setting affiliate:', err);
+      alert(err.message || 'Failed to set affiliate');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   if (!user) {
     return null;
   }
@@ -78,7 +181,7 @@ export default function MallManagePage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-black text-white">
-      <div className="max-w-7xl mx-auto p-4 md:p-8">
+      <div className="max-w-7xl mx-auto p-4 md:p-8 pb-24">
         <div className="mb-8">
           <h1 className="text-3xl md:text-4xl font-bold mb-2">Manage Mall Products</h1>
           <p className="text-gray-400 mb-4">Track your product performance</p>
@@ -136,10 +239,9 @@ export default function MallManagePage() {
                   <tr className="border-b border-gray-700">
                     <th className="text-left py-3 px-2 text-sm font-semibold text-gray-300">Product</th>
                     <th className="text-right py-3 px-2 text-sm font-semibold text-gray-300">Price</th>
-                    <th className="text-right py-3 px-2 text-sm font-semibold text-gray-300">Views</th>
                     <th className="text-right py-3 px-2 text-sm font-semibold text-gray-300">Clicks</th>
                     <th className="text-right py-3 px-2 text-sm font-semibold text-gray-300">Sales</th>
-                    <th className="text-right py-3 px-2 text-sm font-semibold text-gray-300">Revenue</th>
+                    <th className="text-center py-3 px-2 text-sm font-semibold text-gray-300">Status</th>
                     <th className="text-right py-3 px-2 text-sm font-semibold text-gray-300">Actions</th>
                   </tr>
                 </thead>
@@ -155,8 +257,8 @@ export default function MallManagePage() {
                               className="w-12 h-12 rounded object-cover"
                             />
                           )}
-                          <div>
-                            <div className="font-medium">{product.title}</div>
+                          <div className="max-w-[200px]">
+                            <div className="font-medium truncate">{product.title}</div>
                             {product.description && (
                               <div className="text-xs text-gray-400 line-clamp-1">{product.description}</div>
                             )}
@@ -167,24 +269,43 @@ export default function MallManagePage() {
                         ${product.price.toFixed(2)}
                       </td>
                       <td className="py-3 px-2 text-right font-mono text-sm">
-                        {product.views}
-                      </td>
-                      <td className="py-3 px-2 text-right font-mono text-sm">
                         {product.clicks}
                       </td>
                       <td className="py-3 px-2 text-right font-mono text-sm">
                         {product.sales}
                       </td>
-                      <td className="py-3 px-2 text-right font-bold text-yellow-400">
-                        ${(product.price * product.sales).toFixed(2)}
+                      <td className="py-3 px-2 text-center">
+                        {product.network ? (
+                          <span className="inline-block bg-purple-600/30 border border-purple-500/50 px-2 py-1 rounded-full text-xs font-semibold">
+                            🔗 Affiliate
+                          </span>
+                        ) : (
+                          <span className="inline-block bg-gray-700/50 px-2 py-1 rounded-full text-xs text-gray-400">
+                            Direct
+                          </span>
+                        )}
                       </td>
                       <td className="py-3 px-2 text-right">
-                        <Link
-                          href={`/post/${product.post_id}`}
-                          className="text-blue-400 hover:text-blue-300 text-sm underline"
-                        >
-                          View Post
-                        </Link>
+                        <div className="flex gap-2 justify-end flex-wrap">
+                          <button
+                            onClick={() => handleEditClick(product)}
+                            className="bg-blue-600 hover:bg-blue-500 px-3 py-1 rounded text-xs font-semibold transition"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => handleAffiliateClick(product)}
+                            className="bg-purple-600 hover:bg-purple-500 px-3 py-1 rounded text-xs font-semibold transition"
+                          >
+                            {product.network ? 'Update Affiliate' : 'Set Affiliate'}
+                          </button>
+                          <Link
+                            href={`/post/${product.post_id}`}
+                            className="bg-gray-600 hover:bg-gray-500 px-3 py-1 rounded text-xs font-semibold transition"
+                          >
+                            View Post
+                          </Link>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -194,6 +315,139 @@ export default function MallManagePage() {
           </div>
         )}
       </div>
+
+      {editingProduct && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-2xl p-6 max-w-md w-full border border-yellow-500/30 shadow-2xl">
+            <h3 className="text-2xl font-bold mb-4">Edit Product</h3>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-semibold mb-1">Title *</label>
+                <input
+                  type="text"
+                  value={editForm.title}
+                  onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
+                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:border-yellow-500 focus:outline-none"
+                  placeholder="Product title"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold mb-1">Description</label>
+                <textarea
+                  value={editForm.description}
+                  onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:border-yellow-500 focus:outline-none h-20 resize-none"
+                  placeholder="Product description"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold mb-1">Price *</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={editForm.price}
+                  onChange={(e) => setEditForm({ ...editForm, price: parseFloat(e.target.value) })}
+                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:border-yellow-500 focus:outline-none"
+                  placeholder="0.00"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold mb-1">Product URL</label>
+                <input
+                  type="url"
+                  value={editForm.productUrl}
+                  onChange={(e) => setEditForm({ ...editForm, productUrl: e.target.value })}
+                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:border-yellow-500 focus:outline-none"
+                  placeholder="https://..."
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold mb-1">Image URL</label>
+                <input
+                  type="url"
+                  value={editForm.imageUrl}
+                  onChange={(e) => setEditForm({ ...editForm, imageUrl: e.target.value })}
+                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:border-yellow-500 focus:outline-none"
+                  placeholder="https://..."
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={handleSaveEdit}
+                disabled={saving}
+                className="flex-1 bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-black font-bold py-3 rounded-lg transition disabled:opacity-50"
+              >
+                {saving ? 'Saving...' : 'Save Changes'}
+              </button>
+              <button
+                onClick={() => setEditingProduct(null)}
+                disabled={saving}
+                className="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 rounded-lg transition disabled:opacity-50"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {affiliateProduct && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-gradient-to-br from-purple-900 to-gray-900 rounded-2xl p-6 max-w-md w-full border border-purple-500/30 shadow-2xl">
+            <h3 className="text-2xl font-bold mb-2">Set Affiliate Tracking</h3>
+            <p className="text-sm text-gray-400 mb-4">Configure affiliate network and tracking URL</p>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-semibold mb-1">Affiliate Network *</label>
+                <input
+                  type="text"
+                  value={affiliateForm.network}
+                  onChange={(e) => setAffiliateForm({ ...affiliateForm, network: e.target.value })}
+                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:border-purple-500 focus:outline-none"
+                  placeholder="e.g., Amazon Associates, ShareASale"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold mb-1">Tracking URL *</label>
+                <input
+                  type="url"
+                  value={affiliateForm.trackingUrl}
+                  onChange={(e) => setAffiliateForm({ ...affiliateForm, trackingUrl: e.target.value })}
+                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:border-purple-500 focus:outline-none"
+                  placeholder="https://affiliate.link/..."
+                />
+                <p className="text-xs text-gray-400 mt-1">This is the URL users will be redirected to (with tracking)</p>
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={handleSaveAffiliate}
+                disabled={saving}
+                className="flex-1 bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white font-bold py-3 rounded-lg transition disabled:opacity-50"
+              >
+                {saving ? 'Saving...' : 'Save Affiliate'}
+              </button>
+              <button
+                onClick={() => setAffiliateProduct(null)}
+                disabled={saving}
+                className="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 rounded-lg transition disabled:opacity-50"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
