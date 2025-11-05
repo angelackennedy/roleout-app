@@ -4,6 +4,16 @@ import { NextRequest, NextResponse } from 'next/server';
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient();
+    
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return NextResponse.json(
+        { error: 'Authentication required to track engagement' },
+        { status: 401 }
+      );
+    }
+
     const { productId } = await request.json();
 
     if (!productId) {
@@ -13,25 +23,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { data: product } = await supabase
-      .from('mall_products')
-      .select('clicks')
-      .eq('id', productId)
-      .single();
+    const { error: rpcError } = await supabase.rpc('increment_product_clicks', {
+      p_product_id: productId,
+      p_user_id: user.id,
+    });
 
-    if (product) {
-      const { error: updateError } = await supabase
-        .from('mall_products')
-        .update({ clicks: product.clicks + 1 })
-        .eq('id', productId);
-
-      if (updateError) {
-        console.error('Error tracking click:', updateError);
-        return NextResponse.json(
-          { error: 'Failed to track click' },
-          { status: 500 }
-        );
-      }
+    if (rpcError) {
+      console.error('Error tracking click:', rpcError);
+      return NextResponse.json(
+        { error: 'Failed to track click' },
+        { status: 500 }
+      );
     }
 
     return NextResponse.json({ success: true });
