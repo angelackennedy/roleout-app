@@ -5,7 +5,7 @@ import { useAuth } from "@/lib/auth-context";
 import { useNotificationCount } from "@/lib/hooks/useNotificationCount";
 
 export default function Header() {
-  const { user, signOut } = useAuth();
+  const { user, signOut, profile } = useAuth();
   const { unreadCount } = useNotificationCount(user?.id || null);
 
   return (
@@ -33,6 +33,11 @@ export default function Header() {
               <Link href="/mall" className="hover:text-gray-400">
                 🛍️ Mall
               </Link>
+              {profile?.username && (
+                <Link href={`/mall/@${profile.username}`} className="hover:text-gray-400">
+                  My Store
+                </Link>
+              )}
               <Link href="/following" className="hover:text-gray-400">
                 Following
               </Link>

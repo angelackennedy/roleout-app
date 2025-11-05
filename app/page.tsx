@@ -23,6 +23,7 @@ type Post = {
   caption: string | null;
   created_at: string;
   profiles: Profile;
+  mall_products?: Array<{ id: string }>;
 };
 
 function VideoPost({ post, userId, index, currentIndex }: { 
@@ -118,6 +119,30 @@ function VideoPost({ post, userId, index, currentIndex }: {
           }}>
             {post.caption}
           </div>
+        )}
+
+        {post.mall_products && post.mall_products.length > 0 && (
+          <Link
+            href={`/mall/@${post.profiles.username}`}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '6px 12px',
+              background: 'rgba(212, 175, 55, 0.8)',
+              backdropFilter: 'blur(10px)',
+              border: '1px solid rgba(255, 255, 255, 0.3)',
+              borderRadius: 20,
+              color: 'white',
+              textDecoration: 'none',
+              fontSize: 12,
+              fontWeight: 600,
+              marginTop: 8,
+            }}
+          >
+            <span>🛍️</span>
+            <span>View creator store</span>
+          </Link>
         )}
       </div>
 
@@ -267,7 +292,8 @@ export default function Home() {
               id,
               username,
               avatar_url
-            )
+            ),
+            mall_products (id)
           `)
           .not('video_url', 'is', null)
           .neq('video_url', '')
@@ -315,7 +341,8 @@ export default function Home() {
               id,
               username,
               avatar_url
-            )
+            ),
+            mall_products (id)
           `)
           .not('video_url', 'is', null)
           .neq('video_url', '')
@@ -364,7 +391,8 @@ export default function Home() {
             id,
             username,
             avatar_url
-          )
+          ),
+          mall_products (id)
         `)
         .in('id', postIds);
 
