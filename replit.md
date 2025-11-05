@@ -10,10 +10,13 @@ RollCall is a video-based social platform focused on authenticity and transparen
   - Created /mall/manage page for creator product management with stats
   - Added Mall Performance card to Creator Dashboard showing revenue, clicks, sales
   - API routes: /api/mall/products, /api/mall/my-products, /api/mall/add-product, /api/mall/track-click
+  - **Security**: All mall APIs require authentication
+    - Product management APIs scope to creator_id
+    - Click tracking uses SECURITY DEFINER function `increment_product_clicks()`
+    - Atomic increments prevent race conditions and unauthorized manipulation
   - **Note**: After creating new tables, run `NOTIFY pgrst, 'reload schema';` to refresh Supabase PostgREST cache
   - Products include title, description, price, product_url, image_url
   - Engagement tracking: clicks, sales, views for analytics
-  - Security: All mall APIs require authentication and scope to creator_id
 
 - **2025-11-03**: Reporting & Personal Hide
   - Added hidden_posts table for personal content filtering
@@ -131,6 +134,9 @@ RollCall is a video-based social platform focused on authenticity and transparen
 - `mall_products` - E-commerce products attached to posts with engagement tracking
 - `payout_history` - Creator earnings history with weekly aggregation
 - `fairness_votes` - Community voting on algorithm fairness
+
+### Database Functions
+- `increment_product_clicks(p_product_id UUID, p_user_id UUID)` - SECURITY DEFINER function for safe, atomic click tracking
 
 ### File Structure
 ```
