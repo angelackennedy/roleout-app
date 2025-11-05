@@ -240,7 +240,7 @@ export default function VideoPost({ post, isActive, userId = null }: VideoPostPr
       ref={containerRef}
       className="relative h-screen w-full snap-start bg-black flex items-center justify-center"
     >
-      <div className="relative w-full max-w-[500px] h-full mx-auto bg-black rounded-2xl overflow-hidden shadow-2xl">
+      <div className="relative w-full max-w-[500px] aspect-[9/16] mx-auto bg-black rounded-2xl overflow-hidden shadow-2xl">
         <video
           ref={videoRef}
           src={post.video_url}
