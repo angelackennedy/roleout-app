@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { createClient } from '@/lib/supabase-server';
+import { isAdmin } from '@/lib/admin';
 
 export async function GET() {
   try {
@@ -40,7 +41,14 @@ export async function POST(request: Request) {
       );
     }
 
-    const { likes_weight, comments_weight, watch_completion_weight } = await request.json();
+    if (!isAdmin(user.email)) {
+      return NextResponse.json(
+        { error: 'Forbidden - admin access required' },
+        { status: 403 }
+      );
+    }
+
+    const { likes_weight, comments_weight, watch_completion_weight, description } = await request.json();
 
     const total = likes_weight + comments_weight + watch_completion_weight;
     if (Math.abs(total - 1.0) > 0.01) {
@@ -50,9 +58,19 @@ export async function POST(request: Request) {
       );
     }
 
+    const currentVersion = await supabaseServer
+      .from('algorithm_weights')
+      .select('version')
+      .order('version', { ascending: false })
+      .limit(1)
+      .single();
+
+    const newVersion = (currentVersion.data?.version || 0) + 1;
+
     const { data, error } = await supabaseServer
       .from('algorithm_weights')
       .insert({
+        version: newVersion,
         likes_weight,
         comments_weight,
         watch_completion_weight,
@@ -63,6 +81,23 @@ export async function POST(request: Request) {
       .single();
 
     if (error) throw error;
+
+    const { error: changelogError } = await supabaseServer
+      .from('algorithm_changelog')
+      .insert({
+        version: newVersion.toString(),
+        description: description || `Updated weights: likes=${(likes_weight * 100).toFixed(0)}%, comments=${(comments_weight * 100).toFixed(0)}%, watch=${(watch_completion_weight * 100).toFixed(0)}%`,
+        changes: {
+          likes_weight,
+          comments_weight,
+          watch_completion_weight,
+        },
+        created_by: user.id,
+      });
+
+    if (changelogError) {
+      console.error('Error creating changelog entry:', changelogError);
+    }
 
     return NextResponse.json({ weights: data });
   } catch (error) {

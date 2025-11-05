@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/lib/auth-context';
+import { isAdmin } from '@/lib/admin';
 import Link from 'next/link';
 
 interface WeeklyData {
@@ -44,6 +45,11 @@ export default function GovernancePage() {
   const [selectedRating, setSelectedRating] = useState(0);
   const [comment, setComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [editMode, setEditMode] = useState(false);
+  const [editLikes, setEditLikes] = useState(0.4);
+  const [editComments, setEditComments] = useState(0.4);
+  const [editWatch, setEditWatch] = useState(0.2);
+  const [editDescription, setEditDescription] = useState('');
   const { user } = useAuth();
 
   useEffect(() => {
@@ -71,6 +77,12 @@ export default function GovernancePage() {
       setTotalVotes(statsData.totalVotes || 0);
       setChangelog(changelogData.changelog || []);
       setWeights(weightsData.weights || null);
+      
+      if (weightsData.weights) {
+        setEditLikes(weightsData.weights.likes_weight);
+        setEditComments(weightsData.weights.comments_weight);
+        setEditWatch(weightsData.weights.watch_completion_weight);
+      }
     } catch (error) {
       console.error('Error fetching governance data:', error);
     } finally {
@@ -128,6 +140,49 @@ export default function GovernancePage() {
     } catch (error) {
       console.error('Error submitting vote:', error);
       alert('Error submitting vote');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handlePublishWeights = async () => {
+    if (!user || !isAdmin(user.email)) {
+      alert('Unauthorized');
+      return;
+    }
+
+    const total = editLikes + editComments + editWatch;
+    if (Math.abs(total - 1.0) > 0.01) {
+      alert('Weights must sum to 1.0 (currently: ' + total.toFixed(2) + ')');
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      const res = await fetch('/api/transparency/weights', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          likes_weight: editLikes,
+          comments_weight: editComments,
+          watch_completion_weight: editWatch,
+          description: editDescription.trim() || null,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        alert(data.error || 'Failed to update weights');
+      } else {
+        alert('✅ Algorithm weights updated successfully!');
+        setEditMode(false);
+        setEditDescription('');
+        await fetchData();
+      }
+    } catch (error) {
+      console.error('Error updating weights:', error);
+      alert('Error updating weights');
     } finally {
       setSubmitting(false);
     }
@@ -191,6 +246,183 @@ export default function GovernancePage() {
               <div style={{ marginTop: 16, fontSize: 13, opacity: 0.5, textAlign: 'center' }}>
                 Last updated: {new Date(weights.updated_at).toLocaleDateString()}
               </div>
+
+              {user && isAdmin(user.email) && !editMode && (
+                <button
+                  onClick={() => setEditMode(true)}
+                  style={{
+                    width: '100%',
+                    marginTop: 20,
+                    padding: '12px 20px',
+                    background: '#d4af37',
+                    color: '#0a0a0a',
+                    border: 'none',
+                    borderRadius: 8,
+                    fontSize: 15,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    transition: 'opacity 0.2s',
+                  }}
+                  onMouseOver={(e) => e.currentTarget.style.opacity = '0.9'}
+                  onMouseOut={(e) => e.currentTarget.style.opacity = '1'}
+                >
+                  ✏️ Edit Algorithm Weights
+                </button>
+              )}
+
+              {editMode && (
+                <div style={{ marginTop: 20, paddingTop: 20, borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+                  <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 16 }}>
+                    Edit Algorithm Weights (Admin Only)
+                  </h3>
+                  
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 16 }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: 13, marginBottom: 4, opacity: 0.8 }}>
+                        Likes Weight
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        max="1"
+                        value={editLikes}
+                        onChange={(e) => setEditLikes(parseFloat(e.target.value) || 0)}
+                        style={{
+                          width: '100%',
+                          padding: '8px 12px',
+                          background: 'rgba(0,0,0,0.3)',
+                          border: '1px solid rgba(255,255,255,0.2)',
+                          borderRadius: 6,
+                          color: 'white',
+                          fontSize: 14,
+                        }}
+                      />
+                    </div>
+
+                    <div>
+                      <label style={{ display: 'block', fontSize: 13, marginBottom: 4, opacity: 0.8 }}>
+                        Comments Weight
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        max="1"
+                        value={editComments}
+                        onChange={(e) => setEditComments(parseFloat(e.target.value) || 0)}
+                        style={{
+                          width: '100%',
+                          padding: '8px 12px',
+                          background: 'rgba(0,0,0,0.3)',
+                          border: '1px solid rgba(255,255,255,0.2)',
+                          borderRadius: 6,
+                          color: 'white',
+                          fontSize: 14,
+                        }}
+                      />
+                    </div>
+
+                    <div>
+                      <label style={{ display: 'block', fontSize: 13, marginBottom: 4, opacity: 0.8 }}>
+                        Watch Time Weight
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        max="1"
+                        value={editWatch}
+                        onChange={(e) => setEditWatch(parseFloat(e.target.value) || 0)}
+                        style={{
+                          width: '100%',
+                          padding: '8px 12px',
+                          background: 'rgba(0,0,0,0.3)',
+                          border: '1px solid rgba(255,255,255,0.2)',
+                          borderRadius: 6,
+                          color: 'white',
+                          fontSize: 14,
+                        }}
+                      />
+                    </div>
+
+                    <div>
+                      <label style={{ display: 'block', fontSize: 13, marginBottom: 4, opacity: 0.8 }}>
+                        Description (optional)
+                      </label>
+                      <textarea
+                        value={editDescription}
+                        onChange={(e) => setEditDescription(e.target.value)}
+                        placeholder="e.g., Raised watch weight from 0.2 → 0.3"
+                        maxLength={200}
+                        style={{
+                          width: '100%',
+                          padding: '8px 12px',
+                          background: 'rgba(0,0,0,0.3)',
+                          border: '1px solid rgba(255,255,255,0.2)',
+                          borderRadius: 6,
+                          color: 'white',
+                          fontSize: 14,
+                          minHeight: 60,
+                          resize: 'vertical',
+                        }}
+                      />
+                    </div>
+
+                    <div style={{ fontSize: 12, opacity: 0.7, marginTop: 4 }}>
+                      Total: {((editLikes + editComments + editWatch) * 100).toFixed(0)}%
+                      {Math.abs((editLikes + editComments + editWatch) - 1.0) > 0.01 && (
+                        <span style={{ color: '#ff4444', marginLeft: 8 }}>
+                          (must equal 100%)
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button
+                      onClick={handlePublishWeights}
+                      disabled={submitting}
+                      style={{
+                        flex: 1,
+                        padding: '12px 20px',
+                        background: '#d4af37',
+                        color: '#0a0a0a',
+                        border: 'none',
+                        borderRadius: 8,
+                        fontSize: 15,
+                        fontWeight: 600,
+                        cursor: submitting ? 'not-allowed' : 'pointer',
+                        opacity: submitting ? 0.5 : 1,
+                      }}
+                    >
+                      {submitting ? 'Publishing...' : '📢 Publish Update'}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setEditMode(false);
+                        if (weights) {
+                          setEditLikes(weights.likes_weight);
+                          setEditComments(weights.comments_weight);
+                          setEditWatch(weights.watch_completion_weight);
+                        }
+                      }}
+                      style={{
+                        padding: '12px 20px',
+                        background: 'rgba(255,255,255,0.1)',
+                        color: 'white',
+                        border: '1px solid rgba(255,255,255,0.2)',
+                        borderRadius: 8,
+                        fontSize: 15,
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
             </>
           ) : (
             <div style={{ textAlign: 'center', padding: 20, opacity: 0.5 }}>
