@@ -22,7 +22,7 @@ type ManagedProduct = {
 };
 
 export default function MallManagePage() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const router = useRouter();
   const [products, setProducts] = useState<ManagedProduct[]>([]);
   const [loading, setLoading] = useState(true);
@@ -50,12 +50,14 @@ export default function MallManagePage() {
   });
 
   useEffect(() => {
+    if (authLoading) return;
+    
     if (!user) {
       router.push('/');
       return;
     }
     fetchMyProducts();
-  }, [user]);
+  }, [user, authLoading]);
 
   const fetchMyProducts = async () => {
     try {
@@ -167,16 +169,16 @@ export default function MallManagePage() {
     }
   };
 
-  if (!user) {
-    return null;
-  }
-
-  if (loading) {
+  if (authLoading || loading) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-black text-white flex items-center justify-center">
-        <div className="text-xl">Loading your products...</div>
+        <div className="text-xl">Loading...</div>
       </div>
     );
+  }
+
+  if (!user) {
+    return null;
   }
 
   return (
