@@ -378,6 +378,55 @@ export type Database = {
           created_at?: string;
         };
       };
+      mall_affiliates: {
+        Row: {
+          id: string;
+          product_id: string;
+          network: string;
+          tracking_url: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          product_id: string;
+          network: string;
+          tracking_url: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          product_id?: string;
+          network?: string;
+          tracking_url?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      mall_clicks: {
+        Row: {
+          id: string;
+          product_id: string;
+          user_id: string | null;
+          ref: string | null;
+          clicked_at: string;
+        };
+        Insert: {
+          id?: string;
+          product_id: string;
+          user_id?: string | null;
+          ref?: string | null;
+          clicked_at?: string;
+        };
+        Update: {
+          id?: string;
+          product_id?: string;
+          user_id?: string | null;
+          ref?: string | null;
+          clicked_at?: string;
+        };
+      };
     };
     Views: {
       post_metrics: {
