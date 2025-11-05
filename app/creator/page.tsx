@@ -69,6 +69,13 @@ type EarningsData = {
   }>;
 };
 
+type MallStats = {
+  totalClicks: number;
+  totalSales: number;
+  totalRevenue: number;
+  productsCount: number;
+};
+
 export default function CreatorDashboard() {
   const { user } = useAuth();
   const router = useRouter();
@@ -76,6 +83,7 @@ export default function CreatorDashboard() {
   const [timePeriod, setTimePeriod] = useState<TimePeriod>(30);
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [earningsData, setEarningsData] = useState<EarningsData | null>(null);
+  const [mallStats, setMallStats] = useState<MallStats | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -85,6 +93,7 @@ export default function CreatorDashboard() {
     }
     fetchAnalytics();
     fetchEarnings();
+    fetchMallStats();
   }, [user, timePeriod]);
 
   const fetchEarnings = async () => {
@@ -99,6 +108,30 @@ export default function CreatorDashboard() {
       }
     } catch (err) {
       console.error('Error fetching earnings:', err);
+    }
+  };
+
+  const fetchMallStats = async () => {
+    if (!user) return;
+
+    try {
+      const response = await fetch('/api/mall/my-products', { cache: 'no-store' });
+      
+      if (response.ok) {
+        const { products } = await response.json();
+        const totalClicks = products.reduce((sum: number, p: any) => sum + p.clicks, 0);
+        const totalSales = products.reduce((sum: number, p: any) => sum + p.sales, 0);
+        const totalRevenue = products.reduce((sum: number, p: any) => sum + (p.price * p.sales), 0);
+        
+        setMallStats({
+          totalClicks,
+          totalSales,
+          totalRevenue,
+          productsCount: products.length,
+        });
+      }
+    } catch (err) {
+      console.error('Error fetching mall stats:', err);
     }
   };
 
@@ -207,6 +240,37 @@ export default function CreatorDashboard() {
             ))}
           </div>
         </div>
+
+        {mallStats && mallStats.productsCount > 0 && (
+          <Link
+            href="/mall/manage"
+            className="bg-gradient-to-br from-indigo-600 to-indigo-800 rounded-xl p-6 shadow-lg mb-8 block hover:shadow-xl transition"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <div className="text-sm font-semibold text-indigo-200 mb-1">🛍️ Mall Performance</div>
+                <div className="text-4xl font-bold">{mallStats.productsCount} Products</div>
+              </div>
+              <div className="text-right">
+                <div className="text-2xl font-bold text-yellow-400">${mallStats.totalRevenue.toFixed(2)}</div>
+                <div className="text-xs text-indigo-200">Total Revenue</div>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <div className="text-indigo-200 opacity-75">Clicks</div>
+                <div className="font-bold text-lg">{mallStats.totalClicks}</div>
+              </div>
+              <div>
+                <div className="text-indigo-200 opacity-75">Sales</div>
+                <div className="font-bold text-lg">{mallStats.totalSales}</div>
+              </div>
+            </div>
+            <div className="mt-4 text-xs text-indigo-200 opacity-75 text-center">
+              Click to manage your products →
+            </div>
+          </Link>
+        )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           <div className="bg-gradient-to-br from-purple-600 to-purple-800 rounded-xl p-6 shadow-lg">
