@@ -52,13 +52,15 @@ export default function CommandPalette({ isOpen, onClose }: CommandPaletteProps)
 
   // Keyboard navigation
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (results.length === 0) return; // Guard against empty results
+    
     if (e.key === 'ArrowDown') {
       e.preventDefault();
       setSelectedIndex((prev) => (prev + 1) % results.length);
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
       setSelectedIndex((prev) => (prev - 1 + results.length) % results.length);
-    } else if (e.key === 'Enter' && results.length > 0) {
+    } else if (e.key === 'Enter') {
       e.preventDefault();
       router.push(results[selectedIndex].href);
       onClose();
