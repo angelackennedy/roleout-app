@@ -49,6 +49,7 @@ export type Database = {
           video_url: string | null;
           image_url: string | null;
           caption: string | null;
+          hashtags: string[] | null;
           created_at: string;
           like_count: number;
           comment_count: number;
@@ -59,6 +60,7 @@ export type Database = {
           video_url?: string | null;
           image_url?: string | null;
           caption?: string | null;
+          hashtags?: string[] | null;
           created_at?: string;
           like_count?: number;
           comment_count?: number;
@@ -69,6 +71,7 @@ export type Database = {
           video_url?: string | null;
           image_url?: string | null;
           caption?: string | null;
+          hashtags?: string[] | null;
           created_at?: string;
           like_count?: number;
           comment_count?: number;
