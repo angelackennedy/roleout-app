@@ -1,12 +1,30 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { useNotificationCount } from "@/lib/hooks/useNotificationCount";
+import { supabase } from "@/lib/supabase";
 
 export default function Header() {
-  const { user, signOut, profile } = useAuth();
+  const { user, signOut } = useAuth();
   const { unreadCount } = useNotificationCount(user?.id || null);
+  const [username, setUsername] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (user) {
+      supabase
+        .from('profiles')
+        .select('username')
+        .eq('id', user.id)
+        .single()
+        .then(({ data }) => {
+          if (data) setUsername(data.username);
+        });
+    } else {
+      setUsername(null);
+    }
+  }, [user]);
 
   return (
     <header
@@ -33,8 +51,8 @@ export default function Header() {
               <Link href="/mall" className="hover:text-gray-400">
                 🛍️ Mall
               </Link>
-              {profile?.username && (
-                <Link href={`/mall/@${profile.username}`} className="hover:text-gray-400">
+              {username && (
+                <Link href={`/mall/@${username}`} className="hover:text-gray-400">
                   My Store
                 </Link>
               )}

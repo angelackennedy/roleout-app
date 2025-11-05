@@ -43,7 +43,7 @@ type StoreStats = {
 export default function CreatorStorefront() {
   const params = useParams();
   const username = params.username as string;
-  const decodedUsername = decodeURIComponent(username).replace('@', '');
+  const decodedUsername = username ? decodeURIComponent(username).replace('@', '') : '';
   
   const { user } = useAuth();
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -56,10 +56,13 @@ export default function CreatorStorefront() {
 
   useEffect(() => {
     fetchStorefront();
+  }, [decodedUsername]);
+
+  useEffect(() => {
     if (user && profile) {
       checkFollowStatus();
     }
-  }, [decodedUsername, user, profile?.id]);
+  }, [user, profile?.id]);
 
   const fetchStorefront = async () => {
     try {

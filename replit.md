@@ -8,6 +8,13 @@ RollCall is a video-based social platform focused on authenticity and transparen
   - Created mall_products table with product info and engagement metrics
   - Built /mall page with product grid ordered by clicks, sales, views
   - Created /mall/manage page for creator product management with stats
+  - **Creator Storefronts**:
+    - Dynamic route /mall/@[username] showing creator's products and stats
+    - Profile header with avatar, bio, follow button, and engagement stats
+    - Product grid with "View Post" and "Buy Now" actions
+    - Shopping chip on posts linking to creator's storefront when products exist
+    - "My Store" link in header for authenticated users
+    - Loading skeletons and empty states for better UX
   - Added Mall Performance card to Creator Dashboard showing revenue, clicks, sales
   - API routes: /api/mall/products, /api/mall/my-products, /api/mall/add-product, /api/mall/track-click
   - **Security**: All mall APIs require authentication
