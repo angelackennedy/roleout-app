@@ -327,15 +327,13 @@ export default function VideoPost({ post, isActive, userId = null }: VideoPostPr
           </div>
 
           {product && (
-            <div 
-              className="relative mt-3"
-              onMouseEnter={() => setShowProductPrice(true)}
-              onMouseLeave={() => setShowProductPrice(false)}
-              onTouchStart={() => setShowProductPrice(!showProductPrice)}
-            >
+            <div className="relative mt-3 flex flex-wrap gap-2">
               <Link
                 href={`/api/mall/click/${product.id}?ref=feed`}
                 className="inline-flex items-center gap-2 bg-indigo-600/90 backdrop-blur-sm px-4 py-2 rounded-full text-white text-sm font-semibold border border-indigo-400/30 hover:bg-indigo-700 transition-all hover:scale-105 no-underline"
+                onMouseEnter={() => setShowProductPrice(true)}
+                onMouseLeave={() => setShowProductPrice(false)}
+                onTouchStart={() => setShowProductPrice(!showProductPrice)}
               >
                 <span>🛍️</span>
                 <span>View product</span>
@@ -344,6 +342,14 @@ export default function VideoPost({ post, isActive, userId = null }: VideoPostPr
                     ${product.price.toFixed(2)}
                   </span>
                 )}
+              </Link>
+              
+              <Link
+                href={`/mall/@${username}`}
+                className="inline-flex items-center gap-1.5 bg-amber-600/80 backdrop-blur-sm px-3 py-1.5 rounded-full text-white text-xs font-medium border border-amber-400/30 hover:bg-amber-700 transition-all hover:scale-105 no-underline"
+              >
+                <span>🏪</span>
+                <span>View creator store</span>
               </Link>
             </div>
           )}

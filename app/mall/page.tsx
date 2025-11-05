@@ -179,7 +179,10 @@ export default function MallPage() {
                     <p className="text-sm text-gray-400 mb-3 line-clamp-2">{product.description}</p>
                   )}
 
-                  <div className="flex items-center gap-2 mb-3">
+                  <Link 
+                    href={`/mall/@${product.creator_username}`}
+                    className="flex items-center gap-2 mb-3 no-underline hover:opacity-80 transition-opacity"
+                  >
                     {product.creator_avatar ? (
                       <img
                         src={product.creator_avatar}
@@ -189,10 +192,10 @@ export default function MallPage() {
                     ) : (
                       <div className="w-6 h-6 rounded-full bg-gradient-to-br from-yellow-600/30 to-yellow-600/10 border border-gray-600"></div>
                     )}
-                    <span className="text-sm text-gray-400">
+                    <span className="text-sm text-yellow-400/90 hover:text-yellow-300">
                       @{product.creator_username || 'creator'}
                     </span>
-                  </div>
+                  </Link>
 
                   <div className="flex items-center justify-between text-xs text-gray-500 mb-4">
                     <span className="flex items-center gap-1">

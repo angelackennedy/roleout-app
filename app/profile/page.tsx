@@ -287,13 +287,24 @@ export default function ProfilePage() {
           Your Profile
         </h1>
 
-        <p style={{
+        <div style={{
           color: 'rgba(255,255,255,0.6)',
           marginBottom: 30,
           fontSize: 14,
+          display: 'flex',
+          gap: 16,
+          flexWrap: 'wrap',
         }}>
-          View at <Link href={`/u/${profile.username}`} style={{ color: 'rgba(212,175,55,0.8)' }}>/u/{profile.username}</Link>
-        </p>
+          <div>
+            View at <Link href={`/u/${profile.username}`} style={{ color: 'rgba(212,175,55,0.8)' }}>/u/{profile.username}</Link>
+          </div>
+          <div>
+            <span style={{ marginRight: 8 }}>•</span>
+            <Link href={`/mall/@${profile.username}`} style={{ color: 'rgba(212,175,55,0.8)', textDecoration: 'none' }}>
+              🏪 View Storefront
+            </Link>
+          </div>
+        </div>
 
         {error && (
           <div style={{
