@@ -302,6 +302,38 @@ export type Database = {
           created_by?: string | null;
         };
       };
+      payout_history: {
+        Row: {
+          id: string;
+          user_id: string;
+          week_start: string;
+          week_end: string;
+          total_impressions: number;
+          total_earnings: number;
+          posts_count: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          week_start: string;
+          week_end: string;
+          total_impressions?: number;
+          total_earnings?: number;
+          posts_count?: number;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          week_start?: string;
+          week_end?: string;
+          total_impressions?: number;
+          total_earnings?: number;
+          posts_count?: number;
+          created_at?: string;
+        };
+      };
     };
     Views: {
       post_metrics: {
