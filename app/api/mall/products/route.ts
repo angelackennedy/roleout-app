@@ -10,7 +10,8 @@ export async function GET() {
       .select(`
         *,
         creator:profiles!creator_id(username, avatar_url),
-        post:posts!post_id(video_url, image_url)
+        post:posts!post_id(video_url, image_url),
+        mall_affiliates(id)
       `)
       .order('clicks', { ascending: false })
       .order('sales', { ascending: false })
@@ -31,6 +32,7 @@ export async function GET() {
       creator_avatar: product.creator?.avatar_url,
       post_video_url: product.post?.video_url,
       post_image_url: product.post?.image_url,
+      is_affiliate: !!product.mall_affiliates,
     }));
 
     return NextResponse.json({ products });

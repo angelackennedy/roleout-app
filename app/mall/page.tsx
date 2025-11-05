@@ -21,6 +21,7 @@ type MallProduct = {
   creator_avatar?: string;
   post_video_url?: string;
   post_image_url?: string;
+  is_affiliate?: boolean;
 };
 
 export default function MallPage() {
@@ -52,13 +53,8 @@ export default function MallPage() {
     }
   };
 
-  const handleProductClick = (product: MallProduct) => {
-    fetch(`/api/mall/track-click`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ productId: product.id }),
-    }).catch(console.error);
-
+  const handleViewPost = (product: MallProduct, e: React.MouseEvent) => {
+    e.stopPropagation();
     router.push(`/post/${product.post_id}`);
   };
 
@@ -103,8 +99,7 @@ export default function MallPage() {
             {products.map((product) => (
               <div
                 key={product.id}
-                onClick={() => handleProductClick(product)}
-                className="bg-gray-800 rounded-xl overflow-hidden shadow-lg hover:shadow-2xl transition-all cursor-pointer hover:scale-105"
+                className="bg-gray-800 rounded-xl overflow-hidden shadow-lg hover:shadow-2xl transition-all hover:scale-105"
               >
                 <div className="relative aspect-square bg-gray-700">
                   {product.image_url ? (
@@ -133,6 +128,11 @@ export default function MallPage() {
                   <div className="absolute top-2 right-2 bg-yellow-500 text-black px-3 py-1 rounded-full font-bold text-sm">
                     ${product.price.toFixed(2)}
                   </div>
+                  {product.is_affiliate && (
+                    <div className="absolute top-2 left-2 bg-purple-600 text-white px-2 py-1 rounded-full text-xs font-semibold">
+                      🔗 Affiliate
+                    </div>
+                  )}
                 </div>
 
                 <div className="p-4">
@@ -155,10 +155,27 @@ export default function MallPage() {
                     </span>
                   </div>
 
-                  <div className="flex items-center justify-between text-xs text-gray-500">
+                  <div className="flex items-center justify-between text-xs text-gray-500 mb-3">
                     <span>👁️ {product.views}</span>
                     <span>👆 {product.clicks}</span>
                     <span>💰 {product.sales} sales</span>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button
+                      onClick={(e) => handleViewPost(product, e)}
+                      className="flex-1 bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded text-sm font-semibold transition-colors"
+                    >
+                      View Post
+                    </button>
+                    <a
+                      href={`/api/mall/click/${product.id}?ref=mall`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex-1 bg-yellow-500 hover:bg-yellow-600 text-black px-3 py-2 rounded text-sm font-semibold transition-colors text-center"
+                    >
+                      Buy Now
+                    </a>
                   </div>
                 </div>
               </div>

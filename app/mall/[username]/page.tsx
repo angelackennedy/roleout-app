@@ -32,6 +32,9 @@ type ProductWithPost = Product & {
   posts?: {
     id: string;
   };
+  mall_affiliates?: {
+    network: string;
+  };
 };
 
 type StoreStats = {
@@ -85,7 +88,7 @@ export default function CreatorStorefront() {
 
       const { data: productsData, error: productsError } = await supabase
         .from('mall_products')
-        .select('*, posts(id)')
+        .select('*, posts(id), mall_affiliates(network)')
         .eq('creator_id', profileData.id)
         .order('created_at', { ascending: false });
 
@@ -149,19 +152,6 @@ export default function CreatorStorefront() {
     }
   };
 
-  const handleProductClick = async (productId: string) => {
-    if (!user) return;
-
-    try {
-      await fetch('/api/mall/track-click', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ productId }),
-      });
-    } catch (err) {
-      console.error('Failed to track click:', err);
-    }
-  };
 
   if (loading) {
     return (
@@ -514,6 +504,22 @@ export default function CreatorStorefront() {
                       ${product.price.toFixed(2)}
                     </div>
 
+                    {product.mall_affiliates && (
+                      <div style={{
+                        display: 'inline-block',
+                        padding: '4px 10px',
+                        background: 'rgba(138, 43, 226, 0.2)',
+                        border: '1px solid rgba(138, 43, 226, 0.5)',
+                        borderRadius: 12,
+                        fontSize: 11,
+                        fontWeight: 600,
+                        color: 'rgba(186, 85, 211, 1)',
+                        marginBottom: 12,
+                      }}>
+                        🔗 Affiliate
+                      </div>
+                    )}
+
                     <div style={{
                       display: 'flex',
                       gap: 8,
@@ -539,10 +545,9 @@ export default function CreatorStorefront() {
                       )}
 
                       <a
-                        href={product.product_url}
+                        href={`/api/mall/click/${product.id}?ref=storefront`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        onClick={() => handleProductClick(product.id)}
                         style={{
                           flex: 1,
                           padding: '10px 16px',
