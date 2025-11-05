@@ -5,15 +5,16 @@ export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient();
     
-    const searchParams = request.nextUrl.searchParams;
-    const userId = searchParams.get('userId');
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
 
-    if (!userId) {
+    if (authError || !user) {
       return NextResponse.json(
-        { error: 'User ID is required' },
-        { status: 400 }
+        { error: 'Authentication required' },
+        { status: 401 }
       );
     }
+
+    const userId = user.id;
 
     const { data: postMetrics, error: metricsError } = await supabase
       .from('post_metrics')

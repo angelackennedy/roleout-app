@@ -91,8 +91,7 @@ export default function CreatorDashboard() {
     if (!user) return;
 
     try {
-      const url = `/api/earnings?userId=${user.id}`;
-      const response = await fetch(url, { cache: 'no-store' });
+      const response = await fetch('/api/earnings', { cache: 'no-store' });
       
       if (response.ok) {
         const earningsResponse = await response.json();
